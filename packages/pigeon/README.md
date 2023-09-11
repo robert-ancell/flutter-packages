@@ -17,6 +17,7 @@ Currently pigeon supports generating:
 * Kotlin and Java code for Android
 * Swift and Objective-C code for iOS and macOS
 * C++ code for Windows
+* C++ code for Linux
 
 ### Supported Datatypes
 
