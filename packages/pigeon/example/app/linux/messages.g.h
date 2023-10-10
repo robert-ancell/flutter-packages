@@ -33,29 +33,51 @@ G_DECLARE_FINAL_TYPE(MyExampleHostApi, my_example_host_api, MY,
                      EXAMPLE_HOST_API, GObject)
 
 typedef struct {
-  void (*get_host_language)(MyExampleHostApi* object, FlMethodCall* method_call,
-                            gpointer user_data);
-  void (*add)(MyExampleHostApi* object, FlMethodCall* method_call, int64_t a,
+  void (*get_host_language)(
+      MyExampleHostApi* object,
+      FlBasicMessageChannelResponseHandle* response_handle, gpointer user_data);
+  void (*add)(MyExampleHostApi* object,
+              FlBasicMessageChannelResponseHandle* response_handle, int64_t a,
               int64_t b, gpointer user_data);
-  void (*send_message)(MyExampleHostApi* object, FlMethodCall* method_call,
+  void (*send_message)(MyExampleHostApi* object,
+                       FlBasicMessageChannelResponseHandle* response_handle,
                        MyMessageData* message, gpointer user_data);
 } MyExampleHostApiVTable;
 
 MyExampleHostApi* my_example_host_api_new(FlBinaryMessenger* messenger,
-                                          const MyExampleHostApiVTable vtable,
+                                          const MyExampleHostApiVTable* vtable,
                                           gpointer user_data,
                                           GDestroyNotify user_data_free_func);
 
-void my_example_host_api_respond_get_host_language(MyExampleHostApi* object,
-                                                   FlMethodCall* method_call,
-                                                   const gchar* result);
+gboolean my_example_host_api_respond_get_host_language(
+    MyExampleHostApi* object,
+    FlBasicMessageChannelResponseHandle* response_handle, const gchar* result,
+    GError** error);
 
-void my_example_host_api_respond_add(MyExampleHostApi* object,
-                                     FlMethodCall* method_call, int64_t result);
+gboolean my_example_host_api_respond_error_get_host_language(
+    MyExampleHostApi* object,
+    FlBasicMessageChannelResponseHandle* response_handle, const gchar* code,
+    const gchar* message, FlValue* details, GError** error);
 
-void my_example_host_api_respond_send_message(MyExampleHostApi* object,
-                                              FlMethodCall* method_call,
-                                              gboolean result);
+gboolean my_example_host_api_respond_add(
+    MyExampleHostApi* object,
+    FlBasicMessageChannelResponseHandle* response_handle, int64_t result,
+    GError** error);
+
+gboolean my_example_host_api_respond_error_add(
+    MyExampleHostApi* object,
+    FlBasicMessageChannelResponseHandle* response_handle, const gchar* code,
+    const gchar* message, FlValue* details, GError** error);
+
+gboolean my_example_host_api_respond_send_message(
+    MyExampleHostApi* object,
+    FlBasicMessageChannelResponseHandle* response_handle, gboolean result,
+    GError** error);
+
+gboolean my_example_host_api_respond_error_send_message(
+    MyExampleHostApi* object,
+    FlBasicMessageChannelResponseHandle* response_handle, const gchar* code,
+    const gchar* message, FlValue* details, GError** error);
 
 G_DECLARE_FINAL_TYPE(MyMessageFlutterApi, my_message_flutter_api, MY,
                      MESSAGE_FLUTTER_API, GObject)

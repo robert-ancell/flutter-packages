@@ -12,10 +12,46 @@ struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
 
-  MyExampleHostApi *example_host_api;
+  MyExampleHostApi* example_host_api;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+static void handle_get_host_language(
+    MyExampleHostApi* object,
+    FlBasicMessageChannelResponseHandle* response_handle, gpointer user_data) {
+  my_example_host_api_respond_get_host_language(object, response_handle, "C",
+                                                nullptr);
+}
+
+static void handle_add(MyExampleHostApi* object,
+                       FlBasicMessageChannelResponseHandle* response_handle,
+                       int64_t a, int64_t b, gpointer user_data) {
+  if (a < 0 || b < 0) {
+    g_autoptr(FlValue) details = fl_value_new_string("details");
+    my_example_host_api_respond_error_add(object, response_handle, "code",
+                                          "message", details, nullptr);
+    return;
+  }
+
+  my_example_host_api_respond_add(object, response_handle, a + b, nullptr);
+}
+
+static void handle_send_message(
+    MyExampleHostApi* object,
+    FlBasicMessageChannelResponseHandle* response_handle,
+    MyMessageData* message, gpointer user_data) {
+  MyCode code = my_message_data_get_code(message);
+  if (code == MY_CODE_ONE) {
+    g_autoptr(FlValue) details = fl_value_new_string("details");
+    my_example_host_api_respond_error_send_message(
+        object, response_handle, "code", "message", details, nullptr);
+    return;
+  }
+
+  my_example_host_api_respond_send_message(object, response_handle, TRUE,
+                                           nullptr);
+}
 
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
@@ -54,16 +90,21 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_show(GTK_WIDGET(window));
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
-  fl_dart_project_set_dart_entrypoint_arguments(project, self->dart_entrypoint_arguments);
+  fl_dart_project_set_dart_entrypoint_arguments(
+      project, self->dart_entrypoint_arguments);
 
   FlView* view = fl_view_new(project);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
 
-  FlBinaryMessenger *messenger =
-        fl_engine_get_binary_messenger (fl_view_get_engine (view));
-   static MyExampleHostApiVTable example_host_api_vtable = {};
-  self->example_host_api = my_example_host_api_new(messenger, example_host_api_vtable, nullptr, nullptr);
+  FlBinaryMessenger* messenger =
+      fl_engine_get_binary_messenger(fl_view_get_engine(view));
+  static MyExampleHostApiVTable example_host_api_vtable = {
+      .get_host_language = handle_get_host_language,
+      .add = handle_add,
+      .send_message = handle_send_message};
+  self->example_host_api = my_example_host_api_new(
+      messenger, &example_host_api_vtable, self, nullptr);
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
@@ -71,16 +112,18 @@ static void my_application_activate(GApplication* application) {
 }
 
 // Implements GApplication::local_command_line.
-static gboolean my_application_local_command_line(GApplication* application, gchar*** arguments, int* exit_status) {
+static gboolean my_application_local_command_line(GApplication* application,
+                                                  gchar*** arguments,
+                                                  int* exit_status) {
   MyApplication* self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
   self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
 
   g_autoptr(GError) error = nullptr;
   if (!g_application_register(application, nullptr, &error)) {
-     g_warning("Failed to register: %s", error->message);
-     *exit_status = 1;
-     return TRUE;
+    g_warning("Failed to register: %s", error->message);
+    *exit_status = 1;
+    return TRUE;
   }
 
   g_application_activate(application);
@@ -99,7 +142,8 @@ static void my_application_dispose(GObject* object) {
 
 static void my_application_class_init(MyApplicationClass* klass) {
   G_APPLICATION_CLASS(klass)->activate = my_application_activate;
-  G_APPLICATION_CLASS(klass)->local_command_line = my_application_local_command_line;
+  G_APPLICATION_CLASS(klass)->local_command_line =
+      my_application_local_command_line;
   G_OBJECT_CLASS(klass)->dispose = my_application_dispose;
 }
 
@@ -107,7 +151,6 @@ static void my_application_init(MyApplication* self) {}
 
 MyApplication* my_application_new() {
   return MY_APPLICATION(g_object_new(my_application_get_type(),
-                                     "application-id", APPLICATION_ID,
-                                     "flags", G_APPLICATION_NON_UNIQUE,
-                                     nullptr));
+                                     "application-id", APPLICATION_ID, "flags",
+                                     G_APPLICATION_NON_UNIQUE, nullptr));
 }
