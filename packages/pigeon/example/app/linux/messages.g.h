@@ -11,9 +11,9 @@
 
 G_BEGIN_DECLS
 
-G_DECLARE_FINAL_TYPE(MyMessageData, my_message_data, MY, MESSAGE_DATA, GObject)
-
 typedef enum { MY_CODE_ONE = 0, MY_CODE_TWO = 1 } MyCode;
+
+G_DECLARE_FINAL_TYPE(MyMessageData, my_message_data, MY, MESSAGE_DATA, GObject)
 
 MyMessageData* my_message_data_new(MyCode code, FlValue* data);
 
@@ -68,5 +68,7 @@ void my_message_flutter_api_flutter_method_async(MyMessageFlutterApi* object,
 gboolean my_message_flutter_api_flutter_method_finish(
     MyMessageFlutterApi* object, GAsyncResult* result, gchar** value,
     GError** error);
+
+G_END_DECLS
 
 #endif  // PIGEON_MESSAGES_G_H_
