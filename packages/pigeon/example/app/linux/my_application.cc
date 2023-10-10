@@ -11,6 +11,8 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+
+  MyExampleHostApi *example_host_api;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -58,6 +60,11 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
 
+  FlBinaryMessenger *messenger =
+        fl_engine_get_binary_messenger (fl_view_get_engine (view));
+   static MyExampleHostApiVTable example_host_api_vtable = {};
+  self->example_host_api = my_example_host_api_new(messenger, example_host_api_vtable, nullptr, nullptr);
+
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
@@ -86,6 +93,7 @@ static gboolean my_application_local_command_line(GApplication* application, gch
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  g_clear_object(&self->example_host_api);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 

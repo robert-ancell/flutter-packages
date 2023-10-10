@@ -29,19 +29,22 @@ MyCode my_message_data_get_code(MyMessageData* object);
 
 FlValue* my_message_data_get_data(MyMessageData* object);
 
-G_DECLARE_DERIVABLE_TYPE(MyExampleHostApi, my_example_host_api, MY,
-                         EXAMPLE_HOST_API, GObject)
+G_DECLARE_FINAL_TYPE(MyExampleHostApi, my_example_host_api, MY,
+                     EXAMPLE_HOST_API, GObject)
 
-struct _MyExampleHostApiClass {
-  GObjectClass parent_class;
-
-  void (*get_host_language)(MyExampleHostApi* object,
-                            FlMethodCall* method_call);
+typedef struct {
+  void (*get_host_language)(MyExampleHostApi* object, FlMethodCall* method_call,
+                            gpointer user_data);
   void (*add)(MyExampleHostApi* object, FlMethodCall* method_call, int64_t a,
-              int64_t b);
+              int64_t b, gpointer user_data);
   void (*send_message)(MyExampleHostApi* object, FlMethodCall* method_call,
-                       MyMessageData* message);
-};
+                       MyMessageData* message, gpointer user_data);
+} MyExampleHostApiVTable;
+
+MyExampleHostApi* my_example_host_api_new(FlBinaryMessenger* messenger,
+                                          const MyExampleHostApiVTable vtable,
+                                          gpointer user_data,
+                                          GDestroyNotify user_data_free_func);
 
 void my_example_host_api_respond_get_host_language(MyExampleHostApi* object,
                                                    FlMethodCall* method_call,
@@ -57,7 +60,7 @@ void my_example_host_api_respond_send_message(MyExampleHostApi* object,
 G_DECLARE_FINAL_TYPE(MyMessageFlutterApi, my_message_flutter_api, MY,
                      MESSAGE_FLUTTER_API, GObject)
 
-MyMessageFlutterApi* my_message_flutter_api_new();
+MyMessageFlutterApi* my_message_flutter_api_new(FlBinaryMessenger* messenger);
 
 void my_message_flutter_api_flutter_method_async(MyMessageFlutterApi* object,
                                                  const gchar* a_string,
