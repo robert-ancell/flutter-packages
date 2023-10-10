@@ -17,40 +17,37 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
-static void handle_get_host_language(
-    MyExampleHostApi* object,
-    FlBasicMessageChannelResponseHandle* response_handle, gpointer user_data) {
-  my_example_host_api_respond_get_host_language(object, response_handle, "C",
-                                                nullptr);
+static MyExampleHostApiGetHostLanguageResponse* handle_get_host_language(
+    MyExampleHostApi* object, gpointer user_data) {
+  return my_example_host_api_get_host_language_response_new("C");
 }
 
-static void handle_add(MyExampleHostApi* object,
-                       FlBasicMessageChannelResponseHandle* response_handle,
-                       int64_t a, int64_t b, gpointer user_data) {
+static MyExampleHostApiAddResponse* handle_add(MyExampleHostApi* object,
+                                               int64_t a, int64_t b,
+                                               gpointer user_data) {
   if (a < 0 || b < 0) {
     g_autoptr(FlValue) details = fl_value_new_string("details");
-    my_example_host_api_respond_error_add(object, response_handle, "code",
-                                          "message", details, nullptr);
-    return;
+    return my_example_host_api_add_response_new_error("code", "message",
+                                                      details);
   }
 
-  my_example_host_api_respond_add(object, response_handle, a + b, nullptr);
+  return my_example_host_api_add_response_new(a + b);
 }
 
 static void handle_send_message(
     MyExampleHostApi* object,
-    FlBasicMessageChannelResponseHandle* response_handle,
+    MyExampleHostApiSendMessageResponseHandle* response_handle,
     MyMessageData* message, gpointer user_data) {
   MyCode code = my_message_data_get_code(message);
   if (code == MY_CODE_ONE) {
     g_autoptr(FlValue) details = fl_value_new_string("details");
-    my_example_host_api_respond_error_send_message(
-        object, response_handle, "code", "message", details, nullptr);
+    my_example_host_api_send_message_response_handle_respond_error(
+        response_handle, "code", "message", details);
     return;
   }
 
-  my_example_host_api_respond_send_message(object, response_handle, TRUE,
-                                           nullptr);
+  my_example_host_api_send_message_response_handle_respond(response_handle,
+                                                           TRUE);
 }
 
 // Implements GApplication::activate.
