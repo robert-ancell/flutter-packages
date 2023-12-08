@@ -308,7 +308,7 @@ class PigeonOptions {
   /// Path to the ".h" Linux file that will be generated.
   final String? linuxHeaderOut;
 
-  /// Path to the ".cpp" Linux file that will be generated.
+  /// Path to the ".cc" Linux file that will be generated.
   final String? linuxSourceOut;
 
   /// Options that control how C++ will be generated.
@@ -2145,7 +2145,7 @@ ${_argParser.usage}''';
     )
     ..addOption(
       'linux_source_out',
-      help: 'Path to generated Linux classes file (.cpp).',
+      help: 'Path to generated Linux classes file (.cc).',
       aliases: const <String>['experimental_linux_source_out'],
     )
     ..addOption('objc_header_out',

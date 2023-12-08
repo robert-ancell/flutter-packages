@@ -128,6 +128,11 @@ the threading model for handling HostApi methods can be selected with the
 1) Implement the generated protocol for handling the calls on macOS, set it up
    as the handler for the messages.
 
+### Flutter calling into Linux steps
+
+1) FIXME
+1) FIXME
+
 ### Calling into Flutter from the host platform
 
 Pigeon also supports calling in the opposite direction. The steps are similar

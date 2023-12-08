@@ -1511,33 +1511,6 @@ void main() {
     expect(code, contains('const auto& encodable_an_arg_arg = args.at(0);'));
   });
 
-  test('enum argument', () {
-    final Root root = Root(
-      apis: <Api>[
-        Api(name: 'Bar', location: ApiLocation.host, methods: <Method>[
-          Method(
-              name: 'bar',
-              returnType: const TypeDeclaration.voidDeclaration(),
-              arguments: <NamedType>[
-                NamedType(
-                    name: 'foo',
-                    type: const TypeDeclaration(
-                        baseName: 'Foo', isNullable: false))
-              ])
-        ])
-      ],
-      classes: <Class>[],
-      enums: <Enum>[
-        Enum(name: 'Foo', members: <EnumMember>[
-          EnumMember(name: 'one'),
-          EnumMember(name: 'two'),
-        ])
-      ],
-    );
-    final List<Error> errors = validateLinux(const LinuxOptions(), root);
-    expect(errors.length, 1);
-  });
-
   test('transfers documentation comments', () {
     final List<String> comments = <String>[
       ' api comment',

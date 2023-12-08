@@ -192,6 +192,11 @@ class PigeonApiImplementation : public ExampleHostApi {
     result(true);
   }
 };
+
+```
+### Linux
+```c++
+FIXME
 ```
 
 ## FlutterApi Example
@@ -275,6 +280,12 @@ void TestPlugin::CallFlutterMethod(
       aString, [result](String echo) { result(echo); },
       [result](const FlutterError& error) { result(error); });
 }
+```
+
+### Linux
+
+```c++
+FIXME
 ```
 
 ## Swift / Kotlin Plugin Example
