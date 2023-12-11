@@ -28,21 +28,11 @@ static void my_message_data_dispose(GObject* object) {
 static void my_message_data_init(MyMessageData* self) {}
 
 static void my_message_data_class_init(MyMessageDataClass* klass) {
-  GObjectClass* object_class = G_OBJECT_CLASS(klass);
-  object_class->dispose = my_message_data_dispose;
+  G_OBJECT_CLASS(klass)->dispose = my_message_data_dispose;
 }
 
-MyMessageData* my_message_data_new(MyCode code, FlValue* data) {
-  MyMessageData* self =
-      MY_MESSAGE_DATA(g_object_new(my_message_data_get_type(), nullptr));
-  self->code = code;
-  self->data = g_object_ref(data);
-  return self;
-}
-
-MyMessageData* my_message_data_new_full(const gchar* name,
-                                        const gchar* description, MyCode code,
-                                        FlValue* data) {
+MyMessageData* my_message_data_new(const gchar* name, const gchar* description,
+                                   MyCode code, FlValue* data) {
   MyMessageData* self =
       MY_MESSAGE_DATA(g_object_new(my_message_data_get_type(), nullptr));
   self->name = g_strdup(name);
@@ -52,24 +42,24 @@ MyMessageData* my_message_data_new_full(const gchar* name,
   return self;
 }
 
-const gchar* my_message_data_get_name(MyMessageData* object) {
+const gchar* my_message_data_get_name(MyMessageData* self) {
   g_return_val_if_fail(MY_IS_MESSAGE_DATA(object), nullptr);
-  return object->name;
+  return self->name;
 }
 
-const gchar* my_message_data_get_description(MyMessageData* object) {
+const gchar* my_message_data_get_description(MyMessageData* self) {
   g_return_val_if_fail(MY_IS_MESSAGE_DATA(object), nullptr);
-  return object->description;
+  return self->description;
 }
 
-MyCode my_message_data_get_code(MyMessageData* object) {
+MyCode my_message_data_get_code(MyMessageData* self) {
   g_return_val_if_fail(MY_IS_MESSAGE_DATA(object), static_cast<MyCode>(0));
-  return object->code;
+  return self->code;
 }
 
-FlValue* my_message_data_get_data(MyMessageData* object) {
+FlValue* my_message_data_get_data(MyMessageData* self) {
   g_return_val_if_fail(MY_IS_MESSAGE_DATA(object), nullptr);
-  return object->data;
+  return self->data;
 }
 
 struct _MyExampleHostApi {
@@ -164,8 +154,7 @@ static void my_example_host_api_dispose(GObject* object) {
 static void my_example_host_api_init(MyExampleHostApi* self) {}
 
 static void my_example_host_api_class_init(MyExampleHostApiClass* klass) {
-  GObjectClass* object_class = G_OBJECT_CLASS(klass);
-  object_class->dispose = my_example_host_api_dispose;
+  G_OBJECT_CLASS(klass)->dispose = my_example_host_api_dispose;
 }
 
 MyExampleHostApi* my_example_host_api_new(FlBinaryMessenger* messenger,
@@ -240,8 +229,7 @@ static void my_message_flutter_api_dispose(GObject* object) {
 static void my_message_flutter_api_init(MyMessageFlutterApi* self) {}
 
 static void my_message_flutter_api_class_init(MyMessageFlutterApiClass* klass) {
-  GObjectClass* object_class = G_OBJECT_CLASS(klass);
-  object_class->dispose = my_message_flutter_api_dispose;
+  G_OBJECT_CLASS(klass)->dispose = my_message_flutter_api_dispose;
 }
 
 MyMessageFlutterApi* my_message_flutter_api_new(FlBinaryMessenger* messenger) {
@@ -258,7 +246,7 @@ void my_message_flutter_api_flutter_method_async(MyMessageFlutterApi* object,
                                                  gpointer user_data) {}
 
 gboolean my_message_flutter_api_flutter_method_finish(
-    MyMessageFlutterApi* object, GAsyncResult* result, gchar** value,
+    MyMessageFlutterApi* object, GAsyncResult* result, gchar** return_value,
     GError** error) {
   return TRUE;
 }
