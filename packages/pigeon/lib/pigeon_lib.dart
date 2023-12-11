@@ -2148,6 +2148,8 @@ ${_argParser.usage}''';
       help: 'Path to generated Linux classes file (.cc).',
       aliases: const <String>['experimental_linux_source_out'],
     )
+    ..addOption('linux_namespace',
+        help: 'The namespace that generated Linux code will be in.')
     ..addOption('objc_header_out',
         help: 'Path to generated Objective-C header file (.h).')
     ..addOption('objc_prefix',
@@ -2204,7 +2206,9 @@ ${_argParser.usage}''';
       ),
       linuxHeaderOut: results['linux_header_out'] as String?,
       linuxSourceOut: results['linux_source_out'] as String?,
-      linuxOptions: LinuxOptions(),
+      linuxOptions: LinuxOptions(
+        namespace: results['linux_namespace'] as String?,
+      ),
       copyrightHeader: results['copyright_header'] as String?,
       oneLanguage: results['one_language'] as bool?,
       astOut: results['ast_out'] as String?,
@@ -2366,4 +2370,9 @@ ${_argParser.usage}''';
       }
     }
   }
+}
+
+String _snakeCaseFromCamelCase(String camelCase) {
+  return camelCase.replaceAllMapped(RegExp(r'[A-Z]'),
+      (Match m) => '${m.start == 0 ? '' : '_'}${m[0]!.toLowerCase()}');
 }

@@ -24,6 +24,7 @@ class LinuxOptions {
   /// Creates a [LinuxOptions] object
   const LinuxOptions({
     this.headerIncludePath,
+    this.namespace,
     this.copyrightHeader,
     this.headerOutPath,
   });
@@ -31,6 +32,9 @@ class LinuxOptions {
   /// The path to the header that will get placed in the source filed (example:
   /// "foo.h").
   final String? headerIncludePath;
+
+  /// The namespace where the generated class will live.
+  final String? namespace;
 
   /// A copyright header that will get prepended to generated code.
   final Iterable<String>? copyrightHeader;
@@ -43,6 +47,7 @@ class LinuxOptions {
   static LinuxOptions fromMap(Map<String, Object> map) {
     return LinuxOptions(
       headerIncludePath: map['header'] as String?,
+      namespace: map['namespace'] as String?,
       copyrightHeader: map['copyrightHeader'] as Iterable<String>?,
       headerOutPath: map['linuxHeaderOut'] as String?,
     );
@@ -53,6 +58,7 @@ class LinuxOptions {
   Map<String, Object> toMap() {
     final Map<String, Object> result = <String, Object>{
       if (headerIncludePath != null) 'header': headerIncludePath!,
+      if (namespace != null) 'namespace': namespace!,
       if (copyrightHeader != null) 'copyrightHeader': copyrightHeader!,
     };
     return result;
@@ -134,8 +140,25 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
       'flutter_linux/flutter_linux.h',
     ]);
     indent.newln();
-    indent.writeln('$_commentPrefix Generated class from Pigeon.');
   }
+
+  @override
+  void writeOpenNamespace(
+    LinuxOptions generatorOptions,
+    Root root,
+    Indent indent, {
+    required String dartPackageName,
+  }) {
+    indent.writeln('G_BEGIN_DECLS');
+  }
+
+  @override
+  void writeGeneralUtilities(
+    LinuxOptions generatorOptions,
+    Root root,
+    Indent indent, {
+    required String dartPackageName,
+  }) {}
 
   @override
   void writeEnum(
@@ -145,27 +168,23 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     Enum anEnum, {
     required String dartPackageName,
   }) {
+    var namespace = 'My';
+    var enumName = '${namespace}${anEnum.name}';
+    var snakeEnumName = _snakeCaseFromCamelCase(anEnum.name);
+    var upperSnakeEnumName = '${namespace}_${snakeEnumName}'.toUpperCase();
+
     indent.newln();
     addDocumentationComments(
         indent, anEnum.documentationComments, _docCommentSpec);
-    indent.write('typedef enum ');
-    indent.addScoped('{', '} ${anEnum.name};', () {
-      enumerate(anEnum.members, (int index, final EnumMember member) {
-        addDocumentationComments(
-            indent, member.documentationComments, _docCommentSpec);
-        indent.writeln(
-            '${member.name} = $index${index == anEnum.members.length - 1 ? '' : ','}');
-      });
+    indent.addScoped('typedef enum {', '} ${enumName};', () {
+      var enumValues = <String>[];
+      for (var i = 0; i < anEnum.members.length; i++) {
+        var member = anEnum.members[i];
+        var itemName = _snakeCaseFromCamelCase(member.name).toUpperCase();
+        enumValues.add('${upperSnakeEnumName}_${itemName} = $i');
+      }
+      indent.writeln(enumValues.join(', '));
     });
-  }
-
-  @override
-  void writeGeneralUtilities(
-    LinuxOptions generatorOptions,
-    Root root,
-    Indent indent, {
-    required String dartPackageName,
-  }) {
   }
 
   @override
@@ -173,9 +192,39 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     LinuxOptions generatorOptions,
     Root root,
     Indent indent,
-    Class klass, {
+    Class classDefinition, {
     required String dartPackageName,
   }) {
+    var namespace = 'My';
+    var snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    var upperNamespace = namespace.toUpperCase();
+    var className = '${namespace}${classDefinition.name}';
+    var snakeClassName = _snakeCaseFromCamelCase(classDefinition.name);
+    var upperSnakeClassName = snakeClassName.toUpperCase();
+
+    var methodPrefix = '${snakeNamespace}_${snakeClassName}';
+
+    indent.newln();
+    indent.writeln(
+        'G_DECLARE_FINAL_TYPE(${className}, ${methodPrefix}, ${upperNamespace}, ${upperSnakeClassName}, GObject)');
+    indent.newln();
+    var constructorArgs = <String>[];
+    for (var field in classDefinition.fields) {
+      var fieldName = _snakeCaseFromCamelCase(field.name);
+      var type = _getType(field.type);
+      constructorArgs.add('$type $fieldName');
+    }
+    indent.writeln(
+        "${className}* ${methodPrefix}_new(${constructorArgs.join(', ')});");
+
+    for (var field in classDefinition.fields) {
+      var fieldName = _snakeCaseFromCamelCase(field.name);
+      var returnType = _getType(field.type);
+
+      indent.newln();
+      indent.writeln(
+          '${returnType} ${methodPrefix}_get_${fieldName}(${className}* object);');
+    }
   }
 
   @override
@@ -186,6 +235,44 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     Api api, {
     required String dartPackageName,
   }) {
+    var namespace = 'My';
+    var snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    var upperNamespace = namespace.toUpperCase();
+    var className = '${namespace}${api.name}';
+    var snakeClassName = _snakeCaseFromCamelCase(api.name);
+    var upperSnakeClassName = snakeClassName.toUpperCase();
+
+    var methodPrefix = '${snakeNamespace}_${snakeClassName}';
+
+    indent.newln();
+    indent.writeln(
+        'G_DECLARE_FINAL_TYPE(${className}, ${methodPrefix}, ${upperNamespace}, ${upperSnakeClassName}, GObject)');
+    indent.newln();
+    indent.writeln(
+        '${className}* ${methodPrefix}_new(FlBinaryMessenger* messenger);');
+
+    for (var method in api.methods) {
+      var methodName = _snakeCaseFromCamelCase(method.name);
+
+      var asyncArgs = [
+        '${className}* object',
+        'GCancellable* cancellable',
+        'GAsyncReadyCallback callback',
+        'gpointer user_data'
+      ];
+      indent.newln();
+      indent.writeln(
+          "void ${methodPrefix}_${methodName}_async(${asyncArgs.join(', ')}));");
+
+      var finishArgs = [
+        '${className}* object',
+        'GAsyncResult* result',
+        'GError** error'
+      ];
+      indent.newln();
+      indent.writeln(
+          "gboolean ${methodPrefix}_${methodName}_finish(${finishArgs.join(', ')}));");
+    }
   }
 
   @override
@@ -196,6 +283,24 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     Api api, {
     required String dartPackageName,
   }) {
+    var namespace = 'My';
+    var snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    var upperNamespace = namespace.toUpperCase();
+    var className = '${namespace}${api.name}';
+    var snakeClassName = _snakeCaseFromCamelCase(api.name);
+    var upperSnakeClassName = snakeClassName.toUpperCase();
+
+    var methodPrefix = '${snakeNamespace}_${snakeClassName}';
+
+    indent.newln();
+    indent.writeln(
+        'G_DECLARE_FINAL_TYPE(${className}, ${methodPrefix}, ${upperNamespace}, ${upperSnakeClassName}, GObject)');
+    indent.newln();
+    indent.writeln('typedef struct {');
+    indent.writeln('} ${className}VTable;');
+    indent.newln();
+    indent.writeln(
+        '${className}* ${methodPrefix}_new(FlBinaryMessenger* messenger, const ${className}VTable* vtable, gpointer user_data, GDestroyNotify user_data_free_func);');
   }
 
   @override
@@ -205,6 +310,9 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     Indent indent, {
     required String dartPackageName,
   }) {
+    indent.newln();
+    indent.writeln('G_END_DECLS');
+
     final String guardName = _getGuardName(generatorOptions.headerIncludePath);
     indent.writeln('#endif  // $guardName');
   }
@@ -251,8 +359,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Root root,
     Indent indent, {
     required String dartPackageName,
-  }) {
-  }
+  }) {}
 
   @override
   void writeGeneralUtilities(
@@ -260,18 +367,16 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Root root,
     Indent indent, {
     required String dartPackageName,
-  }) {
-  }
+  }) {}
 
   @override
   void writeDataClass(
     LinuxOptions generatorOptions,
     Root root,
     Indent indent,
-    Class klass, {
+    Class classDefinition, {
     required String dartPackageName,
-  }) {
-  }
+  }) {}
 
   @override
   void writeClassEncode(
@@ -280,8 +385,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Indent indent,
     Class classDefintion, {
     required String dartPackageName,
-  }) {
-  }
+  }) {}
 
   @override
   void writeClassDecode(
@@ -290,8 +394,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Indent indent,
     Class classDefinition, {
     required String dartPackageName,
-  }) {
-  }
+  }) {}
 
   @override
   void writeFlutterApi(
@@ -300,8 +403,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Indent indent,
     Api api, {
     required String dartPackageName,
-  }) {
-  }
+  }) {}
 
   @override
   void writeHostApi(
@@ -310,8 +412,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Indent indent,
     Api api, {
     required String dartPackageName,
-  }) {
-  }
+  }) {}
 }
 
 String _getGuardName(String? headerFileName) {
@@ -327,5 +428,22 @@ void _writeSystemHeaderIncludeBlock(Indent indent, List<String> headers) {
   headers.sort();
   for (final String header in headers) {
     indent.writeln('#include <$header>');
+  }
+}
+
+String _snakeCaseFromCamelCase(String camelCase) {
+  return camelCase.replaceAllMapped(RegExp(r'[A-Z]'),
+      (Match m) => '${m.start == 0 ? '' : '_'}${m[0]!.toLowerCase()}');
+}
+
+String _getType(TypeDeclaration type) {
+  var namespace = 'My';
+
+  if (type.isClass || type.isEnum) {
+    return '${namespace}${type.baseName}';
+  } else if (type.baseName == 'String') {
+    return 'const gchar*';
+  } else {
+    return 'FlValue*';
   }
 }
