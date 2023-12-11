@@ -254,24 +254,30 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     for (var method in api.methods) {
       var methodName = _snakeCaseFromCamelCase(method.name);
 
-      var asyncArgs = [
-        '${className}* object',
+      var asyncArgs = ['${className}* object'];
+      for (var param in method.parameters) {
+        var paramName = _snakeCaseFromCamelCase(param.name);
+        var paramType = _getType(param.type);
+        asyncArgs.add('${paramType} ${paramName}');
+      }
+      asyncArgs.addAll([
         'GCancellable* cancellable',
         'GAsyncReadyCallback callback',
         'gpointer user_data'
-      ];
+      ]);
       indent.newln();
       indent.writeln(
-          "void ${methodPrefix}_${methodName}_async(${asyncArgs.join(', ')}));");
+          "void ${methodPrefix}_${methodName}_async(${asyncArgs.join(', ')});");
 
-      var finishArgs = [
-        '${className}* object',
-        'GAsyncResult* result',
-        'GError** error'
-      ];
+      var finishArgs = ['${className}* object', 'GAsyncResult* result'];
+      var returnType = _getType(method.returnType, isOutput: true);
+      if (returnType != 'void') {
+        finishArgs.add('${returnType}* return_value');
+      }
+      finishArgs.add('GError** error');
       indent.newln();
       indent.writeln(
-          "gboolean ${methodPrefix}_${methodName}_finish(${finishArgs.join(', ')}));");
+          "gboolean ${methodPrefix}_${methodName}_finish(${finishArgs.join(', ')});");
     }
   }
 
@@ -291,16 +297,38 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     var upperSnakeClassName = snakeClassName.toUpperCase();
 
     var methodPrefix = '${snakeNamespace}_${snakeClassName}';
+    var vtableName = '${className}VTable';
 
     indent.newln();
     indent.writeln(
         'G_DECLARE_FINAL_TYPE(${className}, ${methodPrefix}, ${upperNamespace}, ${upperSnakeClassName}, GObject)');
     indent.newln();
-    indent.writeln('typedef struct {');
-    indent.writeln('} ${className}VTable;');
+    indent.addScoped('typedef struct {', '} ${vtableName};', () {
+      for (var method in api.methods) {
+        var methodName = _snakeCaseFromCamelCase(method.name);
+
+        var methodArgs = ['${className}* object'];
+        for (var param in method.parameters) {
+          var paramName = _snakeCaseFromCamelCase(param.name);
+          var paramType = _getType(param.type);
+          methodArgs.add('${paramType} ${paramName}');
+        }
+        if (method.isAsynchronous) {
+          // FIXME: Pass handle
+        } else {
+          var returnType = _getType(method.returnType, isOutput: true);
+          if (returnType != 'void') {
+            methodArgs.add('${returnType}* return_value');
+          }
+          methodArgs.add('GError** error');
+        }
+        methodArgs.add('gpointer user_data');
+        indent.writeln("gboolean (*${methodName})(${methodArgs.join(', ')});");
+      }
+    });
     indent.newln();
     indent.writeln(
-        '${className}* ${methodPrefix}_new(FlBinaryMessenger* messenger, const ${className}VTable* vtable, gpointer user_data, GDestroyNotify user_data_free_func);');
+        '${className}* ${methodPrefix}_new(FlBinaryMessenger* messenger, const ${vtableName}* vtable, gpointer user_data, GDestroyNotify user_data_free_func);');
   }
 
   @override
@@ -436,13 +464,23 @@ String _snakeCaseFromCamelCase(String camelCase) {
       (Match m) => '${m.start == 0 ? '' : '_'}${m[0]!.toLowerCase()}');
 }
 
-String _getType(TypeDeclaration type) {
+String _getType(TypeDeclaration type, {bool isOutput = false}) {
   var namespace = 'My';
 
-  if (type.isClass || type.isEnum) {
+  if (type.isEnum) {
     return '${namespace}${type.baseName}';
+  } else if (type.isClass) {
+    return '${namespace}${type.baseName}*';
+  } else if (type.baseName == 'void') {
+    return 'void';
+  } else if (type.baseName == 'bool') {
+    return 'gboolean';
+  } else if (type.baseName == 'int') {
+    return 'int64_t';
+  } else if (type.baseName == 'double') {
+    return 'double';
   } else if (type.baseName == 'String') {
-    return 'const gchar*';
+    return isOutput ? 'gchar*' : 'const gchar*';
   } else {
     return 'FlValue*';
   }
