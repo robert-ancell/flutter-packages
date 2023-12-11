@@ -207,6 +207,7 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     indent.newln();
     indent.writeln(
         'G_DECLARE_FINAL_TYPE(${className}, ${methodPrefix}, ${upperNamespace}, ${upperSnakeClassName}, GObject)');
+
     indent.newln();
     var constructorArgs = <String>[];
     for (var field in classDefinition.fields) {
@@ -363,7 +364,6 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     }
     indent.writeln('$_commentPrefix ${getGeneratedCodeWarning()}');
     indent.writeln('$_commentPrefix $seeAlsoWarning');
-    indent.newln();
   }
 
   @override
@@ -373,12 +373,8 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Indent indent, {
     required String dartPackageName,
   }) {
+    indent.newln();
     indent.writeln('#include "${generatorOptions.headerIncludePath}"');
-    indent.newln();
-    _writeSystemHeaderIncludeBlock(indent, <String>[
-      'flutter_linux/flutter_linux.h',
-    ]);
-    indent.newln();
   }
 
   @override
@@ -404,7 +400,65 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Indent indent,
     Class classDefinition, {
     required String dartPackageName,
-  }) {}
+  }) {
+    var namespace = 'My';
+    var snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    var upperNamespace = namespace.toUpperCase();
+    var className = '${namespace}${classDefinition.name}';
+    var snakeClassName = _snakeCaseFromCamelCase(classDefinition.name);
+
+    var methodPrefix = '${snakeNamespace}_${snakeClassName}';
+    var castMacro = methodPrefix.toUpperCase();
+
+    indent.newln();
+    indent.addScoped('struct _${className} {', '};', () {
+      indent.writeln('GObject parent_instance;');
+      indent.newln();
+
+      for (var field in classDefinition.fields) {
+        var fieldName = _snakeCaseFromCamelCase(field.name);
+        var fieldType = _getType(field.type, isOutput: true);
+        indent.writeln('${fieldType} ${fieldName};');
+      }
+    });
+
+    indent.newln();
+    indent
+        .writeln('G_DEFINE_TYPE(${className}, ${methodPrefix}, G_TYPE_OBJECT)');
+
+    indent.newln();
+    indent.addScoped(
+        'static void ${methodPrefix}_dispose(GObject* object) {', '}', () {
+      indent.writeln('${className}* self = ${castMacro}(object);');
+      indent.writeln(
+          'G_OBJECT_CLASS(${methodPrefix}_parent_class)->dispose(object);');
+    });
+
+    indent.newln();
+    indent.writeln("static void ${methodPrefix}_init(${className}* self) {}");
+
+    indent.newln();
+    indent.addScoped(
+        'static void ${methodPrefix}_class_init(${className}Class* klass) {',
+        '}', () {
+      indent
+          .writeln('G_OBJECT_CLASS(klass)->dispose = ${methodPrefix}_dispose;');
+    });
+
+    var constructorArgs = <String>[];
+    for (var field in classDefinition.fields) {
+      var fieldName = _snakeCaseFromCamelCase(field.name);
+      var type = _getType(field.type);
+      constructorArgs.add('$type $fieldName');
+    }
+    indent.addScoped(
+        "${className}* ${methodPrefix}_new(${constructorArgs.join(', ')}) {",
+        '}', () {
+      indent.writeln(
+          '${className}* self = ${castMacro}(g_object_new(${methodPrefix}_get_type(), nullptr);');
+      indent.writeln('return self;');
+    });
+  }
 
   @override
   void writeClassEncode(
