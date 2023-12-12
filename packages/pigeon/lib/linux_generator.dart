@@ -179,11 +179,10 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     required String dartPackageName,
   }) {
     const String namespace = 'My';
-    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
     final String className = _getClassName(namespace, classDefinition.name);
-    final String snakeClassName = _snakeCaseFromCamelCase(classDefinition.name);
 
-    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+    final String methodPrefix =
+        _getMethodPrefix(namespace, classDefinition.name);
 
     indent.newln();
     _writeDeclareFinalType(indent, namespace, classDefinition.name);
@@ -217,11 +216,9 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     required String dartPackageName,
   }) {
     const String namespace = 'My';
-    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
     final String className = _getClassName(namespace, api.name);
-    final String snakeClassName = _snakeCaseFromCamelCase(api.name);
 
-    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+    final String methodPrefix = _getMethodPrefix(namespace, api.name);
 
     indent.newln();
     _writeDeclareFinalType(indent, namespace, api.name);
@@ -273,11 +270,9 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     required String dartPackageName,
   }) {
     const String namespace = 'My';
-    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
     final String className = _getClassName(namespace, api.name);
-    final String snakeClassName = _snakeCaseFromCamelCase(api.name);
 
-    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+    final String methodPrefix = _getMethodPrefix(namespace, api.name);
     final String vtableName = '${className}VTable';
 
     indent.newln();
@@ -295,7 +290,8 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
           methodArgs.add('$paramType $paramName');
         }
         if (method.isAsynchronous) {
-          // FIXME: Pass handle
+          methodArgs
+              .add('FlBasicMessageChannelResponseHandle* response_handle');
         } else {
           final String returnType =
               _getType(namespace, method.returnType, isOutput: true);
@@ -312,6 +308,29 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     indent.newln();
     indent.writeln(
         '$className* ${methodPrefix}_new(FlBinaryMessenger* messenger, const $vtableName* vtable, gpointer user_data, GDestroyNotify user_data_free_func);');
+
+    for (final Method method
+        in api.methods.where((Method method) => method.isAsynchronous)) {
+      final String methodName = _snakeCaseFromCamelCase(method.name);
+
+      indent.newln();
+      final List<String> respondArgs = <String>[
+        '$className* self',
+        'FlBasicMessageChannelResponseHandle* response_handle',
+        'GError **error'
+      ];
+      indent.writeln(
+          "gboolean ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')});");
+
+      indent.newln();
+      final List<String> respondErrorArgs = <String>[
+        '$className* self',
+        'FlBasicMessageChannelResponseHandle* response_handle',
+        'GError **error'
+      ];
+      indent.writeln(
+          "gboolean ${methodPrefix}_respond_error_$methodName(${respondErrorArgs.join(', ')});");
+    }
   }
 
   @override
@@ -373,7 +392,8 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     final String className = _getClassName(namespace, classDefinition.name);
     final String snakeClassName = _snakeCaseFromCamelCase(classDefinition.name);
 
-    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+    final String methodPrefix =
+        _getMethodPrefix(namespace, classDefinition.name);
     final String testMacro =
         '${snakeNamespace}_IS_$snakeClassName'.toUpperCase();
 
@@ -393,10 +413,17 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
     indent.newln();
     _writeDispose(indent, namespace, classDefinition.name, () {
-      _writeCastSelf(indent, namespace, classDefinition.name, 'object');
+      bool haveSelf = false;
       for (final NamedType field in classDefinition.fields) {
         final String fieldName = _snakeCaseFromCamelCase(field.name);
-        indent.writeln('// FIXME self->$fieldName');
+        final String? clear = _getClear(field, 'self->$fieldName');
+        if (clear != null) {
+          if (!haveSelf) {
+            _writeCastSelf(indent, namespace, classDefinition.name, 'object');
+            haveSelf = true;
+          }
+          indent.writeln('$clear;');
+        }
       }
     });
 
@@ -418,7 +445,9 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       _writeObjectNew(indent, namespace, classDefinition.name);
       for (final NamedType field in classDefinition.fields) {
         final String fieldName = _snakeCaseFromCamelCase(field.name);
-        indent.writeln('self->$fieldName = nullptr; // FIXME');
+        final String value = _referenceValue(field, fieldName);
+
+        indent.writeln('self->$fieldName = $value;');
       }
       indent.writeln('return self;');
     });
@@ -431,7 +460,8 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       indent.addScoped(
           '$returnType ${methodPrefix}_get_$fieldName($className* self) {', '}',
           () {
-        indent.writeln('g_return_val_if_fail($testMacro(object), nullptr);');
+        indent.writeln(
+            'g_return_val_if_fail($testMacro(object), ${_getDefaultValue(namespace, field.type)});');
         indent.writeln('return self->$fieldName;');
       });
     }
@@ -446,11 +476,9 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     required String dartPackageName,
   }) {
     const String namespace = 'My';
-    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
     final String className = _getClassName(namespace, api.name);
-    final String snakeClassName = _snakeCaseFromCamelCase(api.name);
 
-    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+    final String methodPrefix = _getMethodPrefix(namespace, api.name);
 
     indent.newln();
     _writeObjectStruct(indent, namespace, api.name, () {
@@ -529,11 +557,9 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     required String dartPackageName,
   }) {
     const String namespace = 'My';
-    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
     final String className = _getClassName(namespace, api.name);
-    final String snakeClassName = _snakeCaseFromCamelCase(api.name);
 
-    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+    final String methodPrefix = _getMethodPrefix(namespace, api.name);
     final String vtableName = '${className}VTable';
 
     indent.newln();
@@ -545,7 +571,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
       indent.newln();
       for (final Method method in api.methods) {
-        var methodName = _snakeCaseFromCamelCase(method.name);
+        final String methodName = _snakeCaseFromCamelCase(method.name);
         indent.writeln('FlBasicMessageChannel* ${methodName}_channel;');
       }
     });
@@ -554,18 +580,43 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     _writeDefineType(indent, namespace, api.name);
 
     for (final Method method in api.methods) {
-      var methodName = _snakeCaseFromCamelCase(method.name);
+      final String methodName = _snakeCaseFromCamelCase(method.name);
       indent.newln();
       indent.addScoped(
           'static void ${methodName}_cb(FlBasicMessageChannel* channel, FlValue* message, FlBasicMessageChannelResponseHandle* response_handle, gpointer user_data) {',
           '}', () {
         _writeCastSelf(indent, namespace, api.name, 'user_data');
 
-        indent.addScoped('if (self->vtable->${methodName} == nullptr)', '}',
+        indent.addScoped('if (self->vtable->$methodName == nullptr) {', '}',
             () {
-          indent.writeln('// FIXME: Return error');
           indent.writeln('return;');
         });
+
+        if (method.isAsynchronous) {
+          final List<String> vfuncArgs = <String>[
+            'self',
+            'response_handle',
+            'self->user_data'
+          ];
+          indent.writeln("self->vtable->$methodName(${vfuncArgs.join(', ')});");
+        } else {
+          indent.newln();
+          final List<String> vfuncArgs = <String>['self', 'self->user_data'];
+          indent.writeln(
+              "g_autptr(FIXMEResponse) response = self->vtable->$methodName(${vfuncArgs.join(', ')});");
+          indent.addScoped('if (response == nullptr) {', '}', () {
+            indent.writeln('g_warning("Not response returned to FIXME");');
+          });
+
+          indent.newln();
+          indent.writeln('g_autoptr(GError) error = NULL;');
+          indent.addScoped(
+              'if (!fl_basic_message_channel_respond(channel, response_handle, response->value, &error)) {',
+              '}', () {
+            indent.writeln(
+                'g_warning("Failed to send response to FIXME: %s", error->message);');
+          });
+        }
       });
     }
 
@@ -580,7 +631,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
       indent.newln();
       for (final Method method in api.methods) {
-        var methodName = _snakeCaseFromCamelCase(method.name);
+        final String methodName = _snakeCaseFromCamelCase(method.name);
         indent.writeln('g_clear_object(&self->${methodName}_channel);');
       }
     });
@@ -608,7 +659,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         final String channelName =
             makeChannelName(api, method, dartPackageName);
         indent.writeln(
-            'self->${methodName}_channel = fl_basic_message_channel_new(messenger, \"$channelName\", FL_MESSAGE_CODEC(codec));');
+            'self->${methodName}_channel = fl_basic_message_channel_new(messenger, "$channelName", FL_MESSAGE_CODEC(codec));');
         indent.writeln(
             'fl_basic_message_channel_set_message_handler(self->${methodName}_channel, ${methodName}_cb, self, nullptr);');
       }
@@ -618,11 +669,11 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     });
 
     for (final Method method
-        in api.methods.where((method) => method.isAsynchronous)) {
+        in api.methods.where((Method method) => method.isAsynchronous)) {
       final String methodName = _snakeCaseFromCamelCase(method.name);
 
       indent.newln();
-      final List<String> respondArgs = [
+      final List<String> respondArgs = <String>[
         '$className* self',
         'FlBasicMessageChannelResponseHandle* response_handle',
         'GError **error'
@@ -631,12 +682,17 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           "gboolean ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')}) {",
           '}', () {
         indent.writeln('g_autoptr(FlValue) message = fl_value_new_list();');
+        for (final Parameter param in method.parameters) {
+          final String paramName = _snakeCaseFromCamelCase(param.name);
+          indent.writeln(
+              'fl_value_append_take(message, ${_makeFlValue(namespace, param.type, paramName)});');
+        }
         indent.writeln(
-            'return fl_basic_message_channel_respond(self->${methodName}_message_channel, response_handle, message, error);');
+            'return fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, message, error);');
       });
 
       indent.newln();
-      final List<String> respondErrorArgs = [
+      final List<String> respondErrorArgs = <String>[
         '$className* self',
         'FlBasicMessageChannelResponseHandle* response_handle',
         'GError **error'
@@ -646,7 +702,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           '}', () {
         indent.writeln('g_autoptr(FlValue) message = fl_value_new_list();');
         indent.writeln(
-            'return fl_basic_message_channel_respond(self->${methodName}_message_channel, response_handle, message, error);');
+            'return fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, message, error);');
       });
     }
   }
@@ -662,22 +718,19 @@ String _getGuardName(String? headerFileName) {
 }
 
 void _writeDeclareFinalType(Indent indent, String namespace, String name) {
-  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
   final String upperNamespace = namespace.toUpperCase();
   final String className = _getClassName(namespace, name);
   final String snakeClassName = _snakeCaseFromCamelCase(name);
   final String upperSnakeClassName = snakeClassName.toUpperCase();
-  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+  final String methodPrefix = _getMethodPrefix(namespace, name);
 
   indent.writeln(
       'G_DECLARE_FINAL_TYPE($className, $methodPrefix, $upperNamespace, $upperSnakeClassName, GObject)');
 }
 
 void _writeDefineType(Indent indent, String namespace, String name) {
-  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
   final String className = _getClassName(namespace, name);
-  final String snakeClassName = _snakeCaseFromCamelCase(name);
-  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+  final String methodPrefix = _getMethodPrefix(namespace, name);
 
   indent.writeln('G_DEFINE_TYPE($className, $methodPrefix, G_TYPE_OBJECT)');
 }
@@ -696,9 +749,7 @@ void _writeObjectStruct(
 
 void _writeDispose(
     Indent indent, String namespace, String name, Function func) {
-  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
-  final String snakeClassName = _snakeCaseFromCamelCase(name);
-  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+  final String methodPrefix = _getMethodPrefix(namespace, name);
 
   indent.addScoped(
       'static void ${methodPrefix}_dispose(GObject *object) {', '}', () {
@@ -709,10 +760,8 @@ void _writeDispose(
 }
 
 void _writeInit(Indent indent, String namespace, String name, Function func) {
-  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
   final String className = _getClassName(namespace, name);
-  final String snakeClassName = _snakeCaseFromCamelCase(name);
-  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+  final String methodPrefix = _getMethodPrefix(namespace, name);
 
   indent.addScoped('static void ${methodPrefix}_init($className* self) {', '}',
       () {
@@ -722,10 +771,8 @@ void _writeInit(Indent indent, String namespace, String name, Function func) {
 
 void _writeClassInit(
     Indent indent, String namespace, String name, Function func) {
-  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
   final String className = _getClassName(namespace, name);
-  final String snakeClassName = _snakeCaseFromCamelCase(name);
-  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+  final String methodPrefix = _getMethodPrefix(namespace, name);
 
   indent.addScoped(
       'static void ${methodPrefix}_class_init(${className}Class* klass) {', '}',
@@ -739,7 +786,7 @@ void _writeObjectNew(Indent indent, String namespace, String name) {
   final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
   final String className = _getClassName(namespace, name);
   final String snakeClassName = _snakeCaseFromCamelCase(name);
-  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+  final String methodPrefix = _getMethodPrefix(namespace, name);
   final String castMacro = '${snakeNamespace}_$snakeClassName'.toUpperCase();
 
   indent.writeln(
@@ -765,6 +812,12 @@ String _getClassName(String namespace, String name) {
   return '$namespace$name';
 }
 
+String _getMethodPrefix(String namespace, String name) {
+  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+  final String snakeName = _snakeCaseFromCamelCase(name);
+  return '${snakeNamespace}_$snakeName';
+}
+
 String _getEnumValue(String namespace, String enumName, String memberName) {
   final String snakeEnumName = _snakeCaseFromCamelCase(enumName);
   final String snakeMemberName = _snakeCaseFromCamelCase(memberName);
@@ -787,8 +840,10 @@ String _getType(String namespace, TypeDeclaration type,
     return 'double';
   } else if (type.baseName == 'String') {
     return isOutput ? 'gchar*' : 'const gchar*';
-  } else {
+  } else if (type.baseName == 'Map') {
     return 'FlValue*';
+  } else {
+    return 'FlValue(${type.baseName})*';
   }
 }
 
@@ -803,7 +858,66 @@ String _getLocalType(String namespace, TypeDeclaration type) {
     return 'g_autoptr(${_getClassName(namespace, type.baseName)})';
   } else if (type.baseName == 'String') {
     return 'g_autofree gchar*';
+  } else if (type.baseName == 'Map') {
+    return 'g_autoptr(FlValue)';
   } else {
     return 'g_autoptr(FlValue)';
+  }
+}
+
+String? _getClear(NamedType namedType, String variableName) {
+  final TypeDeclaration type = namedType.type;
+
+  if (type.isClass || type.baseName == 'Map') {
+    return 'g_clear_object(&$variableName)';
+  } else if (type.baseName == 'String') {
+    return 'g_clear_pointer(&$variableName, g_free)';
+  } else {
+    return null;
+  }
+}
+
+String _getDefaultValue(String namespace, TypeDeclaration type) {
+  if (type.isEnum) {
+    final String enumName = _getClassName(namespace, type.baseName);
+    return 'static_cast<$enumName>(0)';
+  } else if (type.baseName == 'void') {
+    return '';
+  } else if (type.baseName == 'bool') {
+    return 'FALSE';
+  } else if (type.baseName == 'int') {
+    return '0';
+  } else if (type.baseName == 'double') {
+    return '0.0';
+  } else {
+    return 'nullptr';
+  }
+}
+
+String _referenceValue(NamedType namedType, String variableName) {
+  final TypeDeclaration type = namedType.type;
+
+  if (type.isClass || type.baseName == 'Map') {
+    return 'g_object_ref($variableName)';
+  } else if (type.baseName == 'String') {
+    return 'g_strdup($variableName)';
+  } else {
+    return variableName;
+  }
+}
+
+String _makeFlValue(
+    String namespace, TypeDeclaration type, String variableName) {
+  if (type.isClass) {
+    final String methodPrefix = _getMethodPrefix(namespace, type.baseName);
+    return '${methodPrefix}_to_fl_value($variableName)';
+  } else if (type.baseName == 'bool') {
+    return 'fl_value_new_bool($variableName)';
+  } else if (type.baseName == 'int') {
+    return 'fl_value_new_int($variableName)';
+  } else if (type.baseName == 'double') {
+    return 'fl_value_new_double($variableName)';
+  } else {
+    return 'fl_value_new_null()';
   }
 }
