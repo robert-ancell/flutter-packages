@@ -3,21 +3,15 @@
 // found in the LICENSE file.
 
 import 'ast.dart';
-import 'functional.dart';
 import 'generator.dart';
 import 'generator_tools.dart';
-import 'pigeon_lib.dart' show Error;
 
 /// General comment opening token.
 const String _commentPrefix = '//';
 
-const String _voidType = 'void';
-
 /// Documentation comment spec.
 const DocumentCommentSpecification _docCommentSpec =
     DocumentCommentSpecification(_commentPrefix);
-
-const String _defaultCodecSerializer = 'flutter::StandardCodecSerializer';
 
 /// Options that control how Linux code will be generated.
 class LinuxOptions {
@@ -168,20 +162,22 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     Enum anEnum, {
     required String dartPackageName,
   }) {
-    var namespace = 'My';
-    var enumName = '${namespace}${anEnum.name}';
-    var snakeEnumName = _snakeCaseFromCamelCase(anEnum.name);
-    var upperSnakeEnumName = '${namespace}_${snakeEnumName}'.toUpperCase();
+    const String namespace = 'My';
+    final String enumName = '$namespace${anEnum.name}';
+    final String snakeEnumName = _snakeCaseFromCamelCase(anEnum.name);
+    final String upperSnakeEnumName =
+        '${namespace}_$snakeEnumName'.toUpperCase();
 
     indent.newln();
     addDocumentationComments(
         indent, anEnum.documentationComments, _docCommentSpec);
-    indent.addScoped('typedef enum {', '} ${enumName};', () {
-      var enumValues = <String>[];
-      for (var i = 0; i < anEnum.members.length; i++) {
-        var member = anEnum.members[i];
-        var itemName = _snakeCaseFromCamelCase(member.name).toUpperCase();
-        enumValues.add('${upperSnakeEnumName}_${itemName} = $i');
+    indent.addScoped('typedef enum {', '} $enumName;', () {
+      final List<String> enumValues = <String>[];
+      for (int i = 0; i < anEnum.members.length; i++) {
+        final EnumMember member = anEnum.members[i];
+        final String itemName =
+            _snakeCaseFromCamelCase(member.name).toUpperCase();
+        enumValues.add('${upperSnakeEnumName}_$itemName = $i');
       }
       indent.writeln(enumValues.join(', '));
     });
@@ -195,36 +191,33 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     Class classDefinition, {
     required String dartPackageName,
   }) {
-    var namespace = 'My';
-    var snakeNamespace = _snakeCaseFromCamelCase(namespace);
-    var upperNamespace = namespace.toUpperCase();
-    var className = '${namespace}${classDefinition.name}';
-    var snakeClassName = _snakeCaseFromCamelCase(classDefinition.name);
-    var upperSnakeClassName = snakeClassName.toUpperCase();
+    const String namespace = 'My';
+    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    final String className = '$namespace${classDefinition.name}';
+    final String snakeClassName = _snakeCaseFromCamelCase(classDefinition.name);
 
-    var methodPrefix = '${snakeNamespace}_${snakeClassName}';
+    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
 
     indent.newln();
-    indent.writeln(
-        'G_DECLARE_FINAL_TYPE(${className}, ${methodPrefix}, ${upperNamespace}, ${upperSnakeClassName}, GObject)');
+    _writeDeclareFinalType(indent, namespace, classDefinition.name);
 
     indent.newln();
-    var constructorArgs = <String>[];
-    for (var field in classDefinition.fields) {
-      var fieldName = _snakeCaseFromCamelCase(field.name);
-      var type = _getType(field.type);
+    final List<String> constructorArgs = <String>[];
+    for (final NamedType field in classDefinition.fields) {
+      final String fieldName = _snakeCaseFromCamelCase(field.name);
+      final String type = _getType(namespace, field.type);
       constructorArgs.add('$type $fieldName');
     }
     indent.writeln(
-        "${className}* ${methodPrefix}_new(${constructorArgs.join(', ')});");
+        "$className* ${methodPrefix}_new(${constructorArgs.join(', ')});");
 
-    for (var field in classDefinition.fields) {
-      var fieldName = _snakeCaseFromCamelCase(field.name);
-      var returnType = _getType(field.type);
+    for (final NamedType field in classDefinition.fields) {
+      final String fieldName = _snakeCaseFromCamelCase(field.name);
+      final String returnType = _getType(namespace, field.type);
 
       indent.newln();
       indent.writeln(
-          '${returnType} ${methodPrefix}_get_${fieldName}(${className}* object);');
+          '$returnType ${methodPrefix}_get_$fieldName($className* object);');
     }
   }
 
@@ -236,32 +229,30 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     Api api, {
     required String dartPackageName,
   }) {
-    var namespace = 'My';
-    var snakeNamespace = _snakeCaseFromCamelCase(namespace);
-    var upperNamespace = namespace.toUpperCase();
-    var className = '${namespace}${api.name}';
-    var snakeClassName = _snakeCaseFromCamelCase(api.name);
-    var upperSnakeClassName = snakeClassName.toUpperCase();
+    const String namespace = 'My';
+    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    final String className = '$namespace${api.name}';
+    final String snakeClassName = _snakeCaseFromCamelCase(api.name);
 
-    var methodPrefix = '${snakeNamespace}_${snakeClassName}';
+    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+
+    indent.newln();
+    _writeDeclareFinalType(indent, namespace, api.name);
 
     indent.newln();
     indent.writeln(
-        'G_DECLARE_FINAL_TYPE(${className}, ${methodPrefix}, ${upperNamespace}, ${upperSnakeClassName}, GObject)');
-    indent.newln();
-    indent.writeln(
-        '${className}* ${methodPrefix}_new(FlBinaryMessenger* messenger);');
+        '$className* ${methodPrefix}_new(FlBinaryMessenger* messenger);');
 
-    for (var method in api.methods) {
-      var methodName = _snakeCaseFromCamelCase(method.name);
+    for (final Method method in api.methods) {
+      final String methodName = _snakeCaseFromCamelCase(method.name);
 
-      var asyncArgs = ['${className}* object'];
-      for (var param in method.parameters) {
-        var paramName = _snakeCaseFromCamelCase(param.name);
-        var paramType = _getType(param.type);
-        asyncArgs.add('${paramType} ${paramName}');
+      final List<String> asyncArgs = <String>['$className* object'];
+      for (final Parameter param in method.parameters) {
+        final String paramName = _snakeCaseFromCamelCase(param.name);
+        final String paramType = _getType(namespace, param.type);
+        asyncArgs.add('$paramType $paramName');
       }
-      asyncArgs.addAll([
+      asyncArgs.addAll(<String>[
         'GCancellable* cancellable',
         'GAsyncReadyCallback callback',
         'gpointer user_data'
@@ -270,10 +261,14 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
       indent.writeln(
           "void ${methodPrefix}_${methodName}_async(${asyncArgs.join(', ')});");
 
-      var finishArgs = ['${className}* object', 'GAsyncResult* result'];
-      var returnType = _getType(method.returnType, isOutput: true);
+      final List<String> finishArgs = <String>[
+        '$className* object',
+        'GAsyncResult* result'
+      ];
+      final String returnType =
+          _getType(namespace, method.returnType, isOutput: true);
       if (returnType != 'void') {
-        finishArgs.add('${returnType}* return_value');
+        finishArgs.add('$returnType* return_value');
       }
       finishArgs.add('GError** error');
       indent.newln();
@@ -290,46 +285,46 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     Api api, {
     required String dartPackageName,
   }) {
-    var namespace = 'My';
-    var snakeNamespace = _snakeCaseFromCamelCase(namespace);
-    var upperNamespace = namespace.toUpperCase();
-    var className = '${namespace}${api.name}';
-    var snakeClassName = _snakeCaseFromCamelCase(api.name);
-    var upperSnakeClassName = snakeClassName.toUpperCase();
+    const String namespace = 'My';
+    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    final String className = '$namespace${api.name}';
+    final String snakeClassName = _snakeCaseFromCamelCase(api.name);
 
-    var methodPrefix = '${snakeNamespace}_${snakeClassName}';
-    var vtableName = '${className}VTable';
+    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+    final String vtableName = '${className}VTable';
 
     indent.newln();
-    indent.writeln(
-        'G_DECLARE_FINAL_TYPE(${className}, ${methodPrefix}, ${upperNamespace}, ${upperSnakeClassName}, GObject)');
-    indent.newln();
-    indent.addScoped('typedef struct {', '} ${vtableName};', () {
-      for (var method in api.methods) {
-        var methodName = _snakeCaseFromCamelCase(method.name);
+    _writeDeclareFinalType(indent, namespace, api.name);
 
-        var methodArgs = ['${className}* object'];
-        for (var param in method.parameters) {
-          var paramName = _snakeCaseFromCamelCase(param.name);
-          var paramType = _getType(param.type);
-          methodArgs.add('${paramType} ${paramName}');
+    indent.newln();
+    indent.addScoped('typedef struct {', '} $vtableName;', () {
+      for (final Method method in api.methods) {
+        final String methodName = _snakeCaseFromCamelCase(method.name);
+
+        final List<String> methodArgs = <String>['$className* object'];
+        for (final Parameter param in method.parameters) {
+          final String paramName = _snakeCaseFromCamelCase(param.name);
+          final String paramType = _getType(namespace, param.type);
+          methodArgs.add('$paramType $paramName');
         }
         if (method.isAsynchronous) {
           // FIXME: Pass handle
         } else {
-          var returnType = _getType(method.returnType, isOutput: true);
+          final String returnType =
+              _getType(namespace, method.returnType, isOutput: true);
           if (returnType != 'void') {
-            methodArgs.add('${returnType}* return_value');
+            methodArgs.add('$returnType* return_value');
           }
           methodArgs.add('GError** error');
         }
         methodArgs.add('gpointer user_data');
-        indent.writeln("gboolean (*${methodName})(${methodArgs.join(', ')});");
+        indent.writeln("gboolean (*$methodName)(${methodArgs.join(', ')});");
       }
     });
+
     indent.newln();
     indent.writeln(
-        '${className}* ${methodPrefix}_new(FlBinaryMessenger* messenger, const ${vtableName}* vtable, gpointer user_data, GDestroyNotify user_data_free_func);');
+        '$className* ${methodPrefix}_new(FlBinaryMessenger* messenger, const $vtableName* vtable, gpointer user_data, GDestroyNotify user_data_free_func);');
   }
 
   @override
@@ -342,6 +337,7 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     indent.newln();
     indent.writeln('G_END_DECLS');
 
+    indent.newln();
     final String guardName = _getGuardName(generatorOptions.headerIncludePath);
     indent.writeln('#endif  // $guardName');
   }
@@ -378,22 +374,6 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
   }
 
   @override
-  void writeOpenNamespace(
-    LinuxOptions generatorOptions,
-    Root root,
-    Indent indent, {
-    required String dartPackageName,
-  }) {}
-
-  @override
-  void writeGeneralUtilities(
-    LinuxOptions generatorOptions,
-    Root root,
-    Indent indent, {
-    required String dartPackageName,
-  }) {}
-
-  @override
   void writeDataClass(
     LinuxOptions generatorOptions,
     Root root,
@@ -401,82 +381,68 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Class classDefinition, {
     required String dartPackageName,
   }) {
-    var namespace = 'My';
-    var snakeNamespace = _snakeCaseFromCamelCase(namespace);
-    var upperNamespace = namespace.toUpperCase();
-    var className = '${namespace}${classDefinition.name}';
-    var snakeClassName = _snakeCaseFromCamelCase(classDefinition.name);
+    const String namespace = 'My';
+    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    final String className = '$namespace${classDefinition.name}';
+    final String snakeClassName = _snakeCaseFromCamelCase(classDefinition.name);
 
-    var methodPrefix = '${snakeNamespace}_${snakeClassName}';
-    var castMacro = methodPrefix.toUpperCase();
+    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+    final String castMacro = methodPrefix.toUpperCase();
+    final String testMacro =
+        '${snakeNamespace}_IS_$snakeClassName'.toUpperCase();
 
     indent.newln();
-    indent.addScoped('struct _${className} {', '};', () {
-      indent.writeln('GObject parent_instance;');
+    _writeObjectStruct(indent, namespace, classDefinition.name, () {
       indent.newln();
-
-      for (var field in classDefinition.fields) {
-        var fieldName = _snakeCaseFromCamelCase(field.name);
-        var fieldType = _getType(field.type, isOutput: true);
-        indent.writeln('${fieldType} ${fieldName};');
+      for (final NamedType field in classDefinition.fields) {
+        final String fieldName = _snakeCaseFromCamelCase(field.name);
+        final String fieldType =
+            _getType(namespace, field.type, isOutput: true);
+        indent.writeln('$fieldType $fieldName;');
       }
     });
 
     indent.newln();
-    indent
-        .writeln('G_DEFINE_TYPE(${className}, ${methodPrefix}, G_TYPE_OBJECT)');
+    _writeDefineType(indent, namespace, classDefinition.name);
 
     indent.newln();
-    indent.addScoped(
-        'static void ${methodPrefix}_dispose(GObject* object) {', '}', () {
-      indent.writeln('${className}* self = ${castMacro}(object);');
-      indent.writeln(
-          'G_OBJECT_CLASS(${methodPrefix}_parent_class)->dispose(object);');
+    _writeDispose(indent, namespace, classDefinition.name, () {
+      _writeCastSelf(indent, namespace, classDefinition.name);
     });
 
     indent.newln();
-    indent.writeln("static void ${methodPrefix}_init(${className}* self) {}");
+    _writeInit(indent, namespace, classDefinition.name, () {});
 
     indent.newln();
-    indent.addScoped(
-        'static void ${methodPrefix}_class_init(${className}Class* klass) {',
-        '}', () {
-      indent
-          .writeln('G_OBJECT_CLASS(klass)->dispose = ${methodPrefix}_dispose;');
-    });
+    _writeClassInit(indent, namespace, classDefinition.name, () {});
 
-    var constructorArgs = <String>[];
-    for (var field in classDefinition.fields) {
-      var fieldName = _snakeCaseFromCamelCase(field.name);
-      var type = _getType(field.type);
+    final List<String> constructorArgs = <String>[];
+    for (final NamedType field in classDefinition.fields) {
+      final String fieldName = _snakeCaseFromCamelCase(field.name);
+      final String type = _getType(namespace, field.type);
       constructorArgs.add('$type $fieldName');
     }
     indent.addScoped(
-        "${className}* ${methodPrefix}_new(${constructorArgs.join(', ')}) {",
-        '}', () {
+        "$className* ${methodPrefix}_new(${constructorArgs.join(', ')}) {", '}',
+        () {
       indent.writeln(
-          '${className}* self = ${castMacro}(g_object_new(${methodPrefix}_get_type(), nullptr);');
+          '$className* self = $castMacro(g_object_new(${methodPrefix}_get_type(), nullptr);');
       indent.writeln('return self;');
     });
+
+    for (final NamedType field in classDefinition.fields) {
+      final String fieldName = _snakeCaseFromCamelCase(field.name);
+      final String returnType = _getType(namespace, field.type);
+
+      indent.newln();
+      indent.addScoped(
+          '$returnType ${methodPrefix}_get_$fieldName($className* self) {', '}',
+          () {
+        indent.writeln('g_return_val_if_fail($testMacro(object), nullptr);');
+        indent.writeln('return self->$fieldName;');
+      });
+    }
   }
-
-  @override
-  void writeClassEncode(
-    LinuxOptions generatorOptions,
-    Root root,
-    Indent indent,
-    Class classDefintion, {
-    required String dartPackageName,
-  }) {}
-
-  @override
-  void writeClassDecode(
-    LinuxOptions generatorOptions,
-    Root root,
-    Indent indent,
-    Class classDefinition, {
-    required String dartPackageName,
-  }) {}
 
   @override
   void writeFlutterApi(
@@ -485,7 +451,69 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Indent indent,
     Api api, {
     required String dartPackageName,
-  }) {}
+  }) {
+    const String namespace = 'My';
+    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    final String className = '$namespace${api.name}';
+    final String snakeClassName = _snakeCaseFromCamelCase(api.name);
+
+    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+
+    indent.newln();
+    _writeObjectStruct(indent, namespace, api.name, () {});
+
+    indent.newln();
+    _writeDefineType(indent, namespace, api.name);
+
+    indent.newln();
+    _writeDispose(indent, namespace, api.name, () {
+      _writeCastSelf(indent, namespace, api.name);
+    });
+
+    indent.newln();
+    _writeInit(indent, namespace, api.name, () {});
+
+    indent.newln();
+    _writeClassInit(indent, namespace, api.name, () {});
+
+    for (final Method method in api.methods) {
+      final String methodName = _snakeCaseFromCamelCase(method.name);
+
+      final List<String> asyncArgs = <String>['$className* object'];
+      for (final Parameter param in method.parameters) {
+        final String paramName = _snakeCaseFromCamelCase(param.name);
+        final String paramType = _getType(namespace, param.type);
+        asyncArgs.add('$paramType $paramName');
+      }
+      asyncArgs.addAll(<String>[
+        'GCancellable* cancellable',
+        'GAsyncReadyCallback callback',
+        'gpointer user_data'
+      ]);
+      indent.newln();
+      indent.addScoped(
+          "void ${methodPrefix}_${methodName}_async(${asyncArgs.join(', ')}) {",
+          '}',
+          () {});
+
+      final List<String> finishArgs = <String>[
+        '$className* object',
+        'GAsyncResult* result'
+      ];
+      final String returnType =
+          _getType(namespace, method.returnType, isOutput: true);
+      if (returnType != 'void') {
+        finishArgs.add('$returnType* return_value');
+      }
+      finishArgs.add('GError** error');
+      indent.newln();
+      indent.addScoped(
+          "gboolean ${methodPrefix}_${methodName}_finish(${finishArgs.join(', ')}) {",
+          '}', () {
+        indent.writeln('return TRUE;');
+      });
+    }
+  }
 
   @override
   void writeHostApi(
@@ -494,7 +522,38 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     Indent indent,
     Api api, {
     required String dartPackageName,
-  }) {}
+  }) {
+    const String namespace = 'My';
+    final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+    final String className = '$namespace${api.name}';
+    final String snakeClassName = _snakeCaseFromCamelCase(api.name);
+
+    final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+    final String vtableName = '${className}VTable';
+
+    indent.newln();
+    _writeObjectStruct(indent, namespace, api.name, () {});
+
+    indent.newln();
+    _writeDefineType(indent, namespace, api.name);
+
+    indent.newln();
+    _writeDispose(indent, namespace, api.name, () {
+      _writeCastSelf(indent, namespace, api.name);
+    });
+
+    indent.newln();
+    _writeInit(indent, namespace, api.name, () {});
+
+    indent.newln();
+    _writeClassInit(indent, namespace, api.name, () {});
+
+    indent.newln();
+    indent.addScoped(
+        '$className* ${methodPrefix}_new(FlBinaryMessenger* messenger, const $vtableName* vtable, gpointer user_data, GDestroyNotify user_data_free_func) {',
+        '}',
+        () {});
+  }
 }
 
 String _getGuardName(String? headerFileName) {
@@ -513,18 +572,100 @@ void _writeSystemHeaderIncludeBlock(Indent indent, List<String> headers) {
   }
 }
 
+void _writeDeclareFinalType(Indent indent, String namespace, String name) {
+  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+  final String upperNamespace = namespace.toUpperCase();
+  final String className = '$namespace$name';
+  final String snakeClassName = _snakeCaseFromCamelCase(name);
+  final String upperSnakeClassName = snakeClassName.toUpperCase();
+  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+
+  indent.writeln(
+      'G_DECLARE_FINAL_TYPE($className, $methodPrefix, $upperNamespace, $upperSnakeClassName, GObject)');
+}
+
+void _writeDefineType(Indent indent, String namespace, String name) {
+  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+  final String className = '$namespace$name';
+  final String snakeClassName = _snakeCaseFromCamelCase(name);
+  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+
+  indent.writeln('G_DEFINE_TYPE($className, $methodPrefix, G_TYPE_OBJECT)');
+}
+
+void _writeObjectStruct(
+    Indent indent, String namespace, String name, Function func) {
+  final String className = '$namespace$name';
+
+  indent.addScoped('struct _$className {', '};', () {
+    indent.writeln('GObject parent_instance;');
+    indent.newln();
+
+    func(); // ignore: avoid_dynamic_calls
+  });
+}
+
+void _writeDispose(
+    Indent indent, String namespace, String name, Function func) {
+  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+  final String snakeClassName = _snakeCaseFromCamelCase(name);
+  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+
+  indent.addScoped(
+      'static void ${methodPrefix}_dispose(GObject *object) {', '}', () {
+    func(); // ignore: avoid_dynamic_calls
+    indent.writeln(
+        'G_OBJECT_CLASS(${methodPrefix}_parent_class)->dispose(object);');
+  });
+}
+
+void _writeInit(Indent indent, String namespace, String name, Function func) {
+  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+  final String className = '$namespace$name';
+  final String snakeClassName = _snakeCaseFromCamelCase(name);
+  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+
+  indent.addScoped('static void ${methodPrefix}_init($className* self) {', '}',
+      () {
+    func(); // ignore: avoid_dynamic_calls
+  });
+}
+
+void _writeClassInit(
+    Indent indent, String namespace, String name, Function func) {
+  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+  final String className = '$namespace$name';
+  final String snakeClassName = _snakeCaseFromCamelCase(name);
+  final String methodPrefix = '${snakeNamespace}_$snakeClassName';
+
+  indent.addScoped(
+      'static void ${methodPrefix}_class_init(${className}Class* klass) {', '}',
+      () {
+    indent.writeln('G_OBJECT_CLASS(klass)->dispose = ${methodPrefix}_dispose;');
+    func(); // ignore: avoid_dynamic_calls
+  });
+}
+
+void _writeCastSelf(Indent indent, String namespace, String name) {
+  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+  final String className = '$namespace$name';
+  final String snakeClassName = _snakeCaseFromCamelCase(name);
+  final String castMacro = '${snakeNamespace}_$snakeClassName'.toUpperCase();
+
+  indent.writeln('$className* self = $castMacro(object);');
+}
+
 String _snakeCaseFromCamelCase(String camelCase) {
   return camelCase.replaceAllMapped(RegExp(r'[A-Z]'),
       (Match m) => '${m.start == 0 ? '' : '_'}${m[0]!.toLowerCase()}');
 }
 
-String _getType(TypeDeclaration type, {bool isOutput = false}) {
-  var namespace = 'My';
-
+String _getType(String namespace, TypeDeclaration type,
+    {bool isOutput = false}) {
   if (type.isEnum) {
-    return '${namespace}${type.baseName}';
+    return '$namespace${type.baseName}';
   } else if (type.isClass) {
-    return '${namespace}${type.baseName}*';
+    return '$namespace${type.baseName}*';
   } else if (type.baseName == 'void') {
     return 'void';
   } else if (type.baseName == 'bool') {
