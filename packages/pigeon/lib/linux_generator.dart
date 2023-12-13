@@ -275,6 +275,26 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     final String methodPrefix = _getMethodPrefix(namespace, api.name);
     final String vtableName = '${className}VTable';
 
+    for (final Method method
+        in api.methods.where((Method method) => !method.isAsynchronous)) {
+      final String responseName = _getResponseName(api.name, method.name);
+      final String responseClassName = _getClassName(namespace, responseName);
+      final String responseMethodPrefix =
+          _getMethodPrefix(namespace, responseName);
+
+      indent.newln();
+      _writeDeclareFinalType(indent, namespace, responseName);
+
+      final String returnType = _getType(namespace, method.returnType);
+      indent.newln();
+      indent.writeln(
+          "$responseClassName* ${responseMethodPrefix}_new($returnType return_value);");
+
+      indent.newln();
+      indent.writeln(
+          '$responseClassName* ${responseMethodPrefix}_new_error(const gchar* code, const gchar* message, FlValue* details);');
+    }
+
     indent.newln();
     _writeDeclareFinalType(indent, namespace, api.name);
 
@@ -282,6 +302,8 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     indent.addScoped('typedef struct {', '} $vtableName;', () {
       for (final Method method in api.methods) {
         final String methodName = _snakeCaseFromCamelCase(method.name);
+        final String responseName = _getResponseName(api.name, method.name);
+        final String responseClassName = _getClassName(namespace, responseName);
 
         final List<String> methodArgs = <String>['$className* object'];
         for (final Parameter param in method.parameters) {
@@ -289,19 +311,16 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
           final String paramType = _getType(namespace, param.type);
           methodArgs.add('$paramType $paramName');
         }
+        final String returnType;
         if (method.isAsynchronous) {
           methodArgs
               .add('FlBasicMessageChannelResponseHandle* response_handle');
+          returnType = 'void';
         } else {
-          final String returnType =
-              _getType(namespace, method.returnType, isOutput: true);
-          if (returnType != 'void') {
-            methodArgs.add('$returnType* return_value');
-          }
-          methodArgs.add('GError** error');
+          returnType = '$responseClassName*';
         }
         methodArgs.add('gpointer user_data');
-        indent.writeln("gboolean (*$methodName)(${methodArgs.join(', ')});");
+        indent.writeln("$returnType (*$methodName)(${methodArgs.join(', ')});");
       }
     });
 
@@ -316,8 +335,7 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
       indent.newln();
       final List<String> respondArgs = <String>[
         '$className* self',
-        'FlBasicMessageChannelResponseHandle* response_handle',
-        'GError **error'
+        'FlBasicMessageChannelResponseHandle* response_handle'
       ];
       indent.writeln(
           "gboolean ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')});");
@@ -326,7 +344,9 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
       final List<String> respondErrorArgs = <String>[
         '$className* self',
         'FlBasicMessageChannelResponseHandle* response_handle',
-        'GError **error'
+        'const gchar* code',
+        'const gchar* message',
+        'FlValue* details'
       ];
       indent.writeln(
           "gboolean ${methodPrefix}_respond_error_$methodName(${respondErrorArgs.join(', ')});");
@@ -461,7 +481,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           '$returnType ${methodPrefix}_get_$fieldName($className* self) {', '}',
           () {
         indent.writeln(
-            'g_return_val_if_fail($testMacro(object), ${_getDefaultValue(namespace, field.type)});');
+            'g_return_val_if_fail($testMacro(self), ${_getDefaultValue(namespace, field.type)});');
         indent.writeln('return self->$fieldName;');
       });
     }
@@ -562,6 +582,59 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     final String methodPrefix = _getMethodPrefix(namespace, api.name);
     final String vtableName = '${className}VTable';
 
+    for (final Method method
+        in api.methods.where((Method method) => !method.isAsynchronous)) {
+      final String responseName = _getResponseName(api.name, method.name);
+      final String responseClassName = _getClassName(namespace, responseName);
+      final String responseMethodPrefix =
+          _getMethodPrefix(namespace, responseName);
+
+      indent.newln();
+      _writeObjectStruct(indent, namespace, responseName, () {
+        indent.writeln('FlValue* value;');
+      });
+
+      indent.newln();
+      _writeDefineType(indent, namespace, responseName);
+
+      indent.newln();
+      _writeDispose(indent, namespace, responseName, () {
+        _writeCastSelf(indent, namespace, responseName, 'object');
+        indent.writeln('g_clear_object(&self->value);');
+      });
+
+      indent.newln();
+      _writeInit(indent, namespace, responseName, () {});
+
+      indent.newln();
+      _writeClassInit(indent, namespace, responseName, () {});
+
+      final String returnType = _getType(namespace, method.returnType);
+      indent.newln();
+      indent.addScoped(
+          "$responseClassName* ${responseMethodPrefix}_new($returnType return_value) {",
+          '}', () {
+        _writeObjectNew(indent, namespace, responseName);
+        indent.writeln('self->value = fl_value_new_list();');
+        // FIXME
+        indent.writeln('return self;');
+      });
+
+      indent.newln();
+      indent.addScoped(
+          '$responseClassName* ${responseMethodPrefix}_new_error(const gchar* code, const gchar* message, FlValue* details) {',
+          '}', () {
+        _writeObjectNew(indent, namespace, responseName);
+        indent.writeln('self->value = fl_value_new_list();');
+        indent.writeln(
+            'fl_value_append_take(self->value, fl_value_new_string(code));');
+        indent.writeln(
+            'fl_value_append_take(self->value, fl_value_new_string(message));');
+        indent.writeln('fl_value_append(self->value, details);');
+        indent.writeln('return self;');
+      });
+    }
+
     indent.newln();
     _writeObjectStruct(indent, namespace, api.name, () {
       indent.writeln('FlBinaryMessenger* messenger;');
@@ -581,29 +654,51 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
     for (final Method method in api.methods) {
       final String methodName = _snakeCaseFromCamelCase(method.name);
+      final String responseName = _getResponseName(api.name, method.name);
+      final String responseClassName = _getClassName(namespace, responseName);
+
       indent.newln();
       indent.addScoped(
           'static void ${methodName}_cb(FlBasicMessageChannel* channel, FlValue* message, FlBasicMessageChannelResponseHandle* response_handle, gpointer user_data) {',
           '}', () {
         _writeCastSelf(indent, namespace, api.name, 'user_data');
 
+        indent.newln();
         indent.addScoped('if (self->vtable->$methodName == nullptr) {', '}',
             () {
           indent.writeln('return;');
         });
 
+        final List<String> checks = <String>[
+          'fl_value_get_type(message) != FL_VALUE_TYPE_LIST',
+          'fl_value_get_length(message) != ${method.parameters.length}'
+        ];
+        final List<String> methodArgs = <String>[];
+        for (int i = 0; i < method.parameters.length; i++) {
+          final Parameter param = method.parameters[i];
+          checks.add(
+              'fl_value_get_type(fl_value_get_list_value(message, $i)) != ${_getFlValueType(param.type)}');
+          methodArgs.add(_fromFlValue(
+              namespace, param.type, 'fl_value_get_list_value(message, $i)'));
+        }
+
+        indent.newln();
+        indent.addScoped("if (${checks.join(' || ')}) {", '}', () {
+          indent.writeln('return;');
+        });
+
+        indent.newln();
         if (method.isAsynchronous) {
-          final List<String> vfuncArgs = <String>[
-            'self',
-            'response_handle',
-            'self->user_data'
-          ];
+          final List<String> vfuncArgs = <String>['self', 'response_handle'];
+          vfuncArgs.addAll(methodArgs);
+          vfuncArgs.add('self->user_data');
           indent.writeln("self->vtable->$methodName(${vfuncArgs.join(', ')});");
         } else {
-          indent.newln();
-          final List<String> vfuncArgs = <String>['self', 'self->user_data'];
+          final List<String> vfuncArgs = <String>['self'];
+          vfuncArgs.addAll(methodArgs);
+          vfuncArgs.add('self->user_data');
           indent.writeln(
-              "g_autptr(FIXMEResponse) response = self->vtable->$methodName(${vfuncArgs.join(', ')});");
+              "g_autoptr($responseClassName) response = self->vtable->$methodName(${vfuncArgs.join(', ')});");
           indent.addScoped('if (response == nullptr) {', '}', () {
             indent.writeln('g_warning("Not response returned to FIXME");');
           });
@@ -675,8 +770,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       indent.newln();
       final List<String> respondArgs = <String>[
         '$className* self',
-        'FlBasicMessageChannelResponseHandle* response_handle',
-        'GError **error'
+        'FlBasicMessageChannelResponseHandle* response_handle'
       ];
       indent.addScoped(
           "gboolean ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')}) {",
@@ -687,22 +781,31 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           indent.writeln(
               'fl_value_append_take(message, ${_makeFlValue(namespace, param.type, paramName)});');
         }
-        indent.writeln(
-            'return fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, message, error);');
+        indent.writeln('g_autoptr(GError) error = nullptr;');
+        indent.addScoped(
+            'if (!fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, message, &error)) {',
+            '}', () {
+          indent.writeln(
+              'g_warning("Failed to send response to FIXME: %s", error->message);');
+        });
       });
 
       indent.newln();
       final List<String> respondErrorArgs = <String>[
         '$className* self',
-        'FlBasicMessageChannelResponseHandle* response_handle',
-        'GError **error'
+        'FlBasicMessageChannelResponseHandle* response_handle'
       ];
       indent.addScoped(
           "gboolean ${methodPrefix}_respond_error_$methodName(${respondErrorArgs.join(', ')}) {",
           '}', () {
         indent.writeln('g_autoptr(FlValue) message = fl_value_new_list();');
-        indent.writeln(
-            'return fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, message, error);');
+        indent.writeln('g_autoptr(GError) error = nullptr;');
+        indent.addScoped(
+            'if (!fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, message, &error)) {',
+            '}', () {
+          indent.writeln(
+              'g_warning("Failed to send response to FIXME: %s", error->message);');
+        });
       });
     }
   }
@@ -812,6 +915,12 @@ String _getClassName(String namespace, String name) {
   return '$namespace$name';
 }
 
+String _getResponseName(String name, String methodName) {
+  final String upperMethodName =
+      methodName[0].toUpperCase() + methodName.substring(1);
+  return '$name${upperMethodName}Response';
+}
+
 String _getMethodPrefix(String namespace, String name) {
   final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
   final String snakeName = _snakeCaseFromCamelCase(name);
@@ -919,5 +1028,35 @@ String _makeFlValue(
     return 'fl_value_new_double($variableName)';
   } else {
     return 'fl_value_new_null()';
+  }
+}
+
+String _fromFlValue(
+    String namespace, TypeDeclaration type, String variableName) {
+  if (type.isClass) {
+    final String methodPrefix = _getMethodPrefix(namespace, type.baseName);
+    return '${methodPrefix}_new_from_fl_value($variableName)';
+  } else if (type.baseName == 'bool') {
+    return 'fl_value_get_bool($variableName)';
+  } else if (type.baseName == 'int') {
+    return 'fl_value_get_int($variableName)';
+  } else if (type.baseName == 'double') {
+    return 'fl_value_get_double($variableName)';
+  } else {
+    return 'nullptr';
+  }
+}
+
+String _getFlValueType(TypeDeclaration type) {
+  if (type.isClass) {
+    return 'FL_VALUE_TYPE_MAP'; // FIXME?
+  } else if (type.baseName == 'bool') {
+    return 'FL_VALUE_TYPE_BOOL';
+  } else if (type.baseName == 'int') {
+    return 'FL_VALUE_TYPE_INT';
+  } else if (type.baseName == 'double') {
+    return 'FL_VALUE_TYPE_DOUBLE';
+  } else {
+    return 'FIXME';
   }
 }
