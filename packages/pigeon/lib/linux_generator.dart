@@ -340,7 +340,7 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
         '$returnType return_value'
       ];
       indent.writeln(
-          "gboolean ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')});");
+          "void ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')});");
 
       indent.newln();
       final List<String> respondErrorArgs = <String>[
@@ -351,7 +351,7 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
         'FlValue* details'
       ];
       indent.writeln(
-          "gboolean ${methodPrefix}_respond_error_$methodName(${respondErrorArgs.join(', ')});");
+          "void ${methodPrefix}_respond_error_$methodName(${respondErrorArgs.join(', ')});");
     }
   }
 
@@ -461,6 +461,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       final String type = _getType(namespace, field.type);
       constructorArgs.add('$type $fieldName');
     }
+    indent.newln();
     indent.addScoped(
         "$className* ${methodPrefix}_new(${constructorArgs.join(', ')}) {", '}',
         () {
@@ -471,6 +472,15 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
         indent.writeln('self->$fieldName = $value;');
       }
+      indent.writeln('return self;');
+    });
+
+    indent.newln();
+    indent.addScoped(
+        "static $className* ${methodPrefix}_new_from_fl_value(FlValue *value) {",
+        '}', () {
+      _writeObjectNew(indent, namespace, classDefinition.name);
+      indent.writeln('// FIXME');
       indent.writeln('return self;');
     });
 
@@ -592,11 +602,13 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     _writeDeclareFinalType(indent, namespace, codecName,
         parentClassName: 'FlMessageCodec');
 
+    indent.newln();
     _writeObjectStruct(indent, namespace, codecName, () {},
         parentClassName: 'FlMessageCodec');
 
     indent.newln();
-    _writeDefineType(indent, namespace, codecName);
+    _writeDefineType(indent, namespace, codecName,
+        parentType: 'fl_message_codec_get_type()');
 
     indent.newln();
     _writeInit(indent, namespace, codecName, () {});
@@ -723,9 +735,9 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
         indent.newln();
         if (method.isAsynchronous) {
-          final List<String> vfuncArgs = <String>['self', 'response_handle'];
+          final List<String> vfuncArgs = <String>['self'];
           vfuncArgs.addAll(methodArgs);
-          vfuncArgs.add('self->user_data');
+          vfuncArgs.addAll(['response_handle', 'self->user_data']);
           indent.writeln("self->vtable->$methodName(${vfuncArgs.join(', ')});");
         } else {
           final List<String> vfuncArgs = <String>['self'];
@@ -813,7 +825,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         '$returnType return_value'
       ];
       indent.addScoped(
-          "gboolean ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')}) {",
+          "void ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')}) {",
           '}', () {
         indent.writeln(
             'g_autoptr($responseClassName) response = ${responseMethodPrefix}_new(return_value);');
@@ -835,7 +847,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         'FlValue* details'
       ];
       indent.addScoped(
-          "gboolean ${methodPrefix}_respond_error_$methodName(${respondErrorArgs.join(', ')}) {",
+          "void ${methodPrefix}_respond_error_$methodName(${respondErrorArgs.join(', ')}) {",
           '}', () {
         indent.writeln(
             'g_autoptr($responseClassName) response = ${responseMethodPrefix}_new_error(code, message, details);');
@@ -872,11 +884,12 @@ void _writeDeclareFinalType(Indent indent, String namespace, String name,
       'G_DECLARE_FINAL_TYPE($className, $methodPrefix, $upperNamespace, $upperSnakeClassName, $parentClassName)');
 }
 
-void _writeDefineType(Indent indent, String namespace, String name) {
+void _writeDefineType(Indent indent, String namespace, String name,
+    {String parentType = 'G_TYPE_OBJECT'}) {
   final String className = _getClassName(namespace, name);
   final String methodPrefix = _getMethodPrefix(namespace, name);
 
-  indent.writeln('G_DEFINE_TYPE($className, $methodPrefix, G_TYPE_OBJECT)');
+  indent.writeln('G_DEFINE_TYPE($className, $methodPrefix, $parentType)');
 }
 
 void _writeObjectStruct(
