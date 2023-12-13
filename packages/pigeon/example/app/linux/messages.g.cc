@@ -43,22 +43,22 @@ MyMessageData* my_message_data_new(const gchar* name, const gchar* description,
 }
 
 const gchar* my_message_data_get_name(MyMessageData* self) {
-  g_return_val_if_fail(MY_IS_MESSAGE_DATA(object), nullptr);
+  g_return_val_if_fail(MY_IS_MESSAGE_DATA(self), nullptr);
   return self->name;
 }
 
 const gchar* my_message_data_get_description(MyMessageData* self) {
-  g_return_val_if_fail(MY_IS_MESSAGE_DATA(object), nullptr);
+  g_return_val_if_fail(MY_IS_MESSAGE_DATA(self), nullptr);
   return self->description;
 }
 
 MyCode my_message_data_get_code(MyMessageData* self) {
-  g_return_val_if_fail(MY_IS_MESSAGE_DATA(object), static_cast<MyCode>(0));
+  g_return_val_if_fail(MY_IS_MESSAGE_DATA(self), static_cast<MyCode>(0));
   return self->code;
 }
 
 FlValue* my_message_data_get_data(MyMessageData* self) {
-  g_return_val_if_fail(MY_IS_MESSAGE_DATA(object), nullptr);
+  g_return_val_if_fail(MY_IS_MESSAGE_DATA(self), nullptr);
   return self->data;
 }
 
