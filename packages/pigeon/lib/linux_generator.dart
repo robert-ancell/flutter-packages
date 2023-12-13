@@ -331,11 +331,13 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     for (final Method method
         in api.methods.where((Method method) => method.isAsynchronous)) {
       final String methodName = _snakeCaseFromCamelCase(method.name);
+      final String returnType = _getType(namespace, method.returnType);
 
       indent.newln();
       final List<String> respondArgs = <String>[
         '$className* self',
-        'FlBasicMessageChannelResponseHandle* response_handle'
+        'FlBasicMessageChannelResponseHandle* response_handle',
+        '$returnType return_value'
       ];
       indent.writeln(
           "gboolean ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')});");
@@ -582,12 +584,16 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     final String methodPrefix = _getMethodPrefix(namespace, api.name);
     final String vtableName = '${className}VTable';
 
-    for (final Method method
-        in api.methods.where((Method method) => !method.isAsynchronous)) {
+    for (final Method method in api.methods) {
       final String responseName = _getResponseName(api.name, method.name);
       final String responseClassName = _getClassName(namespace, responseName);
       final String responseMethodPrefix =
           _getMethodPrefix(namespace, responseName);
+
+      if (method.isAsynchronous) {
+        indent.newln();
+        _writeDeclareFinalType(indent, namespace, responseName);
+      }
 
       indent.newln();
       _writeObjectStruct(indent, namespace, responseName, () {
@@ -612,17 +618,18 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       final String returnType = _getType(namespace, method.returnType);
       indent.newln();
       indent.addScoped(
-          "$responseClassName* ${responseMethodPrefix}_new($returnType return_value) {",
+          "${method.isAsynchronous ? 'static ' : ''}$responseClassName* ${responseMethodPrefix}_new($returnType return_value) {",
           '}', () {
         _writeObjectNew(indent, namespace, responseName);
         indent.writeln('self->value = fl_value_new_list();');
-        // FIXME
+        indent.writeln(
+            "fl_value_append_take(self->value, ${_makeFlValue(namespace, method.returnType, 'return_value')});");
         indent.writeln('return self;');
       });
 
       indent.newln();
       indent.addScoped(
-          '$responseClassName* ${responseMethodPrefix}_new_error(const gchar* code, const gchar* message, FlValue* details) {',
+          '${method.isAsynchronous ? 'static ' : ''}$responseClassName* ${responseMethodPrefix}_new_error(const gchar* code, const gchar* message, FlValue* details) {',
           '}', () {
         _writeObjectNew(indent, namespace, responseName);
         indent.writeln('self->value = fl_value_new_list();');
@@ -765,25 +772,27 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
     for (final Method method
         in api.methods.where((Method method) => method.isAsynchronous)) {
+      final String returnType = _getType(namespace, method.returnType);
       final String methodName = _snakeCaseFromCamelCase(method.name);
+      final String responseName = _getResponseName(api.name, method.name);
+      final String responseClassName = _getClassName(namespace, responseName);
+      final String responseMethodPrefix =
+          _getMethodPrefix(namespace, responseName);
 
       indent.newln();
       final List<String> respondArgs = <String>[
         '$className* self',
-        'FlBasicMessageChannelResponseHandle* response_handle'
+        'FlBasicMessageChannelResponseHandle* response_handle',
+        '$returnType return_value'
       ];
       indent.addScoped(
           "gboolean ${methodPrefix}_respond_$methodName(${respondArgs.join(', ')}) {",
           '}', () {
-        indent.writeln('g_autoptr(FlValue) message = fl_value_new_list();');
-        for (final Parameter param in method.parameters) {
-          final String paramName = _snakeCaseFromCamelCase(param.name);
-          indent.writeln(
-              'fl_value_append_take(message, ${_makeFlValue(namespace, param.type, paramName)});');
-        }
+        indent.writeln(
+            'g_autoptr($responseClassName) response = ${responseMethodPrefix}_new(return_value);');
         indent.writeln('g_autoptr(GError) error = nullptr;');
         indent.addScoped(
-            'if (!fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, message, &error)) {',
+            'if (!fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, response->value, &error)) {',
             '}', () {
           indent.writeln(
               'g_warning("Failed to send response to FIXME: %s", error->message);');
@@ -793,15 +802,19 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       indent.newln();
       final List<String> respondErrorArgs = <String>[
         '$className* self',
-        'FlBasicMessageChannelResponseHandle* response_handle'
+        'FlBasicMessageChannelResponseHandle* response_handle',
+        'const gchar* code',
+        'const gchar* message',
+        'FlValue* details'
       ];
       indent.addScoped(
           "gboolean ${methodPrefix}_respond_error_$methodName(${respondErrorArgs.join(', ')}) {",
           '}', () {
-        indent.writeln('g_autoptr(FlValue) message = fl_value_new_list();');
+        indent.writeln(
+            'g_autoptr($responseClassName) response = ${responseMethodPrefix}_new_error(code, message, details);');
         indent.writeln('g_autoptr(GError) error = nullptr;');
         indent.addScoped(
-            'if (!fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, message, &error)) {',
+            'if (!fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, response->value, &error)) {',
             '}', () {
           indent.writeln(
               'g_warning("Failed to send response to FIXME: %s", error->message);');

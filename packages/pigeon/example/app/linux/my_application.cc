@@ -35,19 +35,17 @@ static MyExampleHostApiAddResponse* handle_add(MyExampleHostApi* object,
 }
 
 static void handle_send_message(
-    MyExampleHostApi* object,
-    MyExampleHostApiSendMessageResponseHandle* response_handle,
-    MyMessageData* message, gpointer user_data) {
+    MyExampleHostApi* object, MyMessageData* message,
+    FlBasicMessageChannelResponseHandle* response_handle, gpointer user_data) {
   MyCode code = my_message_data_get_code(message);
   if (code == MY_CODE_ONE) {
     g_autoptr(FlValue) details = fl_value_new_string("details");
-    my_example_host_api_send_message_response_handle_respond_error(
-        response_handle, "code", "message", details);
+    my_example_host_api_respond_error_send_message(object, response_handle,
+                                                   "code", "message", details);
     return;
   }
 
-  my_example_host_api_send_message_response_handle_respond(response_handle,
-                                                           TRUE);
+  my_example_host_api_respond_send_message(object, response_handle, TRUE);
 }
 
 // Implements GApplication::activate.

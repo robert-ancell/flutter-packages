@@ -26,22 +26,55 @@ MyCode my_message_data_get_code(MyMessageData* object);
 
 FlValue* my_message_data_get_data(MyMessageData* object);
 
+G_DECLARE_FINAL_TYPE(MyExampleHostApiGetHostLanguageResponse,
+                     my_example_host_api_get_host_language_response, MY,
+                     EXAMPLE_HOST_API_GET_HOST_LANGUAGE_RESPONSE, GObject)
+
+MyExampleHostApiGetHostLanguageResponse*
+my_example_host_api_get_host_language_response_new(const gchar* return_value);
+
+MyExampleHostApiGetHostLanguageResponse*
+my_example_host_api_get_host_language_response_new_error(const gchar* code,
+                                                         const gchar* message,
+                                                         FlValue* details);
+
+G_DECLARE_FINAL_TYPE(MyExampleHostApiAddResponse,
+                     my_example_host_api_add_response, MY,
+                     EXAMPLE_HOST_API_ADD_RESPONSE, GObject)
+
+MyExampleHostApiAddResponse* my_example_host_api_add_response_new(
+    int64_t return_value);
+
+MyExampleHostApiAddResponse* my_example_host_api_add_response_new_error(
+    const gchar* code, const gchar* message, FlValue* details);
+
 G_DECLARE_FINAL_TYPE(MyExampleHostApi, my_example_host_api, MY,
                      EXAMPLE_HOST_API, GObject)
 
 typedef struct {
-  gboolean (*get_host_language)(MyExampleHostApi* object, gchar** return_value,
-                                GError** error, gpointer user_data);
-  gboolean (*add)(MyExampleHostApi* object, int64_t a, int64_t b,
-                  int64_t* return_value, GError** error, gpointer user_data);
-  gboolean (*send_message)(MyExampleHostApi* object, MyMessageData* message,
-                           gpointer user_data);
+  MyExampleHostApiGetHostLanguageResponse* (*get_host_language)(
+      MyExampleHostApi* object, gpointer user_data);
+  MyExampleHostApiAddResponse* (*add)(MyExampleHostApi* object, int64_t a,
+                                      int64_t b, gpointer user_data);
+  void (*send_message)(MyExampleHostApi* object, MyMessageData* message,
+                       FlBasicMessageChannelResponseHandle* response_handle,
+                       gpointer user_data);
 } MyExampleHostApiVTable;
 
 MyExampleHostApi* my_example_host_api_new(FlBinaryMessenger* messenger,
                                           const MyExampleHostApiVTable* vtable,
                                           gpointer user_data,
                                           GDestroyNotify user_data_free_func);
+
+gboolean my_example_host_api_respond_send_message(
+    MyExampleHostApi* self,
+    FlBasicMessageChannelResponseHandle* response_handle,
+    gboolean return_value);
+
+gboolean my_example_host_api_respond_error_send_message(
+    MyExampleHostApi* self,
+    FlBasicMessageChannelResponseHandle* response_handle, const gchar* code,
+    const gchar* message, FlValue* details);
 
 G_DECLARE_FINAL_TYPE(MyMessageFlutterApi, my_message_flutter_api, MY,
                      MESSAGE_FLUTTER_API, GObject)
@@ -59,4 +92,5 @@ gboolean my_message_flutter_api_flutter_method_finish(
     GError** error);
 
 G_END_DECLS
+
 #endif  // PIGEON_MESSAGES_G_H_
