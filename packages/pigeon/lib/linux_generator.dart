@@ -584,6 +584,33 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     final String methodPrefix = _getMethodPrefix(namespace, api.name);
     final String vtableName = '${className}VTable';
 
+    final String codecName = '${api.name}Codec';
+    final String codecClassName = _getClassName(namespace, codecName);
+    final String codecMethodPrefix = '${methodPrefix}_codec';
+
+    indent.newln();
+    _writeDeclareFinalType(indent, namespace, codecName,
+        parentClassName: 'FlMessageCodec');
+
+    _writeObjectStruct(indent, namespace, codecName, () {},
+        parentClassName: 'FlMessageCodec');
+
+    indent.newln();
+    _writeDefineType(indent, namespace, codecName);
+
+    indent.newln();
+    _writeInit(indent, namespace, codecName, () {});
+
+    indent.newln();
+    _writeClassInit(indent, namespace, codecName, () {}, hasDispose: false);
+
+    indent.newln();
+    indent.addScoped(
+        'static $codecClassName* ${codecMethodPrefix}_new() {', '}', () {
+      _writeObjectNew(indent, namespace, codecName);
+      indent.writeln('return self;');
+    });
+
     for (final Method method in api.methods) {
       final String responseName = _getResponseName(api.name, method.name);
       final String responseClassName = _getClassName(namespace, responseName);
@@ -755,7 +782,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
       indent.newln();
       indent.writeln(
-          'g_autoptr(FlStandardMessageCodec) codec = fl_standard_message_codec_new();');
+          'g_autoptr($codecClassName) codec = ${codecMethodPrefix}_new();');
       for (final Method method in api.methods) {
         final String methodName = _snakeCaseFromCamelCase(method.name);
         final String channelName =
@@ -833,7 +860,8 @@ String _getGuardName(String? headerFileName) {
   }
 }
 
-void _writeDeclareFinalType(Indent indent, String namespace, String name) {
+void _writeDeclareFinalType(Indent indent, String namespace, String name,
+    {String parentClassName = 'GObject'}) {
   final String upperNamespace = namespace.toUpperCase();
   final String className = _getClassName(namespace, name);
   final String snakeClassName = _snakeCaseFromCamelCase(name);
@@ -841,7 +869,7 @@ void _writeDeclareFinalType(Indent indent, String namespace, String name) {
   final String methodPrefix = _getMethodPrefix(namespace, name);
 
   indent.writeln(
-      'G_DECLARE_FINAL_TYPE($className, $methodPrefix, $upperNamespace, $upperSnakeClassName, GObject)');
+      'G_DECLARE_FINAL_TYPE($className, $methodPrefix, $upperNamespace, $upperSnakeClassName, $parentClassName)');
 }
 
 void _writeDefineType(Indent indent, String namespace, String name) {
@@ -852,11 +880,12 @@ void _writeDefineType(Indent indent, String namespace, String name) {
 }
 
 void _writeObjectStruct(
-    Indent indent, String namespace, String name, Function func) {
+    Indent indent, String namespace, String name, Function func,
+    {String parentClassName = 'GObject'}) {
   final String className = _getClassName(namespace, name);
 
   indent.addScoped('struct _$className {', '};', () {
-    indent.writeln('GObject parent_instance;');
+    indent.writeln('$parentClassName parent_instance;');
     indent.newln();
 
     func(); // ignore: avoid_dynamic_calls
@@ -886,14 +915,18 @@ void _writeInit(Indent indent, String namespace, String name, Function func) {
 }
 
 void _writeClassInit(
-    Indent indent, String namespace, String name, Function func) {
+    Indent indent, String namespace, String name, Function func,
+    {bool hasDispose = true}) {
   final String className = _getClassName(namespace, name);
   final String methodPrefix = _getMethodPrefix(namespace, name);
 
   indent.addScoped(
       'static void ${methodPrefix}_class_init(${className}Class* klass) {', '}',
       () {
-    indent.writeln('G_OBJECT_CLASS(klass)->dispose = ${methodPrefix}_dispose;');
+    if (hasDispose) {
+      indent
+          .writeln('G_OBJECT_CLASS(klass)->dispose = ${methodPrefix}_dispose;');
+    }
     func(); // ignore: avoid_dynamic_calls
   });
 }
