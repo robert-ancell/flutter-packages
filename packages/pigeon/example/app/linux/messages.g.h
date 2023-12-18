@@ -66,12 +66,12 @@ MyExampleHostApi* my_example_host_api_new(FlBinaryMessenger* messenger,
                                           gpointer user_data,
                                           GDestroyNotify user_data_free_func);
 
-gboolean my_example_host_api_respond_send_message(
+void my_example_host_api_respond_send_message(
     MyExampleHostApi* self,
     FlBasicMessageChannelResponseHandle* response_handle,
     gboolean return_value);
 
-gboolean my_example_host_api_respond_error_send_message(
+void my_example_host_api_respond_error_send_message(
     MyExampleHostApi* self,
     FlBasicMessageChannelResponseHandle* response_handle, const gchar* code,
     const gchar* message, FlValue* details);

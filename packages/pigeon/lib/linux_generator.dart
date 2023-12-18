@@ -475,15 +475,6 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       indent.writeln('return self;');
     });
 
-    indent.newln();
-    indent.addScoped(
-        "static $className* ${methodPrefix}_new_from_fl_value(FlValue *value) {",
-        '}', () {
-      _writeObjectNew(indent, namespace, classDefinition.name);
-      indent.writeln('// FIXME');
-      indent.writeln('return self;');
-    });
-
     for (final NamedType field in classDefinition.fields) {
       final String fieldName = _snakeCaseFromCamelCase(field.name);
       final String returnType = _getType(namespace, field.type);
@@ -600,21 +591,42 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
     indent.newln();
     _writeDeclareFinalType(indent, namespace, codecName,
-        parentClassName: 'FlMessageCodec');
+        parentClassName: 'FlStandardMessageCodec');
 
     indent.newln();
     _writeObjectStruct(indent, namespace, codecName, () {},
-        parentClassName: 'FlMessageCodec');
+        parentClassName: 'FlStandardMessageCodec');
 
     indent.newln();
     _writeDefineType(indent, namespace, codecName,
-        parentType: 'fl_message_codec_get_type()');
+        parentType: 'fl_standard_message_codec_get_type()');
+
+    indent.newln();
+    indent.addScoped(
+        'static gboolean ${methodPrefix}_write_value(FlStandardMessageCodec* codec, GByteArray* buffer, FlValue* value, GError** error) {',
+        '}', () {
+      indent.writeln(
+          'return FL_STANDARD_MESSAGE_CODEC_CLASS(${methodPrefix}_parent_class)->write_value(codec, buffer, value, error);');
+    });
+
+    indent.newln();
+    indent.addScoped(
+        'static FlValue* ${methodPrefix}_read_value_of_type(FlStandardMessageCodec* codec, GByteArray* buffer, size_t* offset, int type, GError** error) {',
+        '}', () {
+      indent.writeln(
+          'return FL_STANDARD_MESSAGE_CODEC_CLASS(${methodPrefix}_parent_class)->read_value_of_type(codec, buffer, offset, type, error);');
+    });
 
     indent.newln();
     _writeInit(indent, namespace, codecName, () {});
 
     indent.newln();
-    _writeClassInit(indent, namespace, codecName, () {}, hasDispose: false);
+    _writeClassInit(indent, namespace, codecName, () {
+      indent.writeln(
+          'FL_STANDARD_MESSAGE_CODEC_CLASS(klass)->write_value = ${methodPrefix}_write_value;');
+      indent.writeln(
+          'FL_STANDARD_MESSAGE_CODEC_CLASS(klass)->read_value_of_type = ${methodPrefix}_read_value_of_type;');
+    }, hasDispose: false);
 
     indent.newln();
     indent.addScoped(
@@ -1077,8 +1089,7 @@ String _referenceValue(NamedType namedType, String variableName) {
 String _makeFlValue(
     String namespace, TypeDeclaration type, String variableName) {
   if (type.isClass) {
-    final String methodPrefix = _getMethodPrefix(namespace, type.baseName);
-    return '${methodPrefix}_to_fl_value($variableName)';
+    return 'fl_value_new_custom_object(0, $variableName)';
   } else if (type.baseName == 'bool') {
     return 'fl_value_new_bool($variableName)';
   } else if (type.baseName == 'int') {
@@ -1093,8 +1104,7 @@ String _makeFlValue(
 String _fromFlValue(
     String namespace, TypeDeclaration type, String variableName) {
   if (type.isClass) {
-    final String methodPrefix = _getMethodPrefix(namespace, type.baseName);
-    return '${methodPrefix}_new_from_fl_value($variableName)';
+    return 'fl_value_get_custom_object($variableName)';
   } else if (type.baseName == 'bool') {
     return 'fl_value_get_bool($variableName)';
   } else if (type.baseName == 'int') {
@@ -1108,7 +1118,7 @@ String _fromFlValue(
 
 String _getFlValueType(TypeDeclaration type) {
   if (type.isClass) {
-    return 'FL_VALUE_TYPE_MAP'; // FIXME?
+    return 'FL_VALUE_TYPE_CUSTOM';
   } else if (type.baseName == 'bool') {
     return 'FL_VALUE_TYPE_BOOL';
   } else if (type.baseName == 'int') {
