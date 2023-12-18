@@ -605,6 +605,21 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     indent.addScoped(
         'static gboolean ${methodPrefix}_write_value(FlStandardMessageCodec* codec, GByteArray* buffer, FlValue* value, GError** error) {',
         '}', () {
+      indent.addScoped(
+          'if (fl_value_get_type(value) == FL_VALUE_TYPE_CUSTOM) {', '}', () {
+        indent.addScoped('switch (fl_value_get_custom_type(value)) {', '}', () {
+          for (final EnumeratedClass customClass
+              in getCodecClasses(api, root)) {
+            indent.writeln('case ${customClass.enumeration}:');
+            indent.nest(1, () {
+              indent.writeln('// FIXME');
+              indent.writeln('return TRUE;');
+            });
+          }
+        });
+      });
+
+      indent.newln();
       indent.writeln(
           'return FL_STANDARD_MESSAGE_CODEC_CLASS(${methodPrefix}_parent_class)->write_value(codec, buffer, value, error);');
     });
@@ -613,8 +628,21 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     indent.addScoped(
         'static FlValue* ${methodPrefix}_read_value_of_type(FlStandardMessageCodec* codec, GByteArray* buffer, size_t* offset, int type, GError** error) {',
         '}', () {
-      indent.writeln(
-          'return FL_STANDARD_MESSAGE_CODEC_CLASS(${methodPrefix}_parent_class)->read_value_of_type(codec, buffer, offset, type, error);');
+      indent.addScoped('switch (type) {', '}', () {
+        for (final EnumeratedClass customClass in getCodecClasses(api, root)) {
+          indent.writeln('case ${customClass.enumeration}:');
+          indent.nest(1, () {
+            indent.writeln('// FIXME');
+            indent.writeln('return nullptr;');
+          });
+        }
+
+        indent.writeln('default:');
+        indent.nest(1, () {
+          indent.writeln(
+              'return FL_STANDARD_MESSAGE_CODEC_CLASS(${methodPrefix}_parent_class)->read_value_of_type(codec, buffer, offset, type, error);');
+        });
+      });
     });
 
     indent.newln();

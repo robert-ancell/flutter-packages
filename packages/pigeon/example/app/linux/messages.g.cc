@@ -76,6 +76,14 @@ static gboolean my_example_host_api_write_value(FlStandardMessageCodec* codec,
                                                 GByteArray* buffer,
                                                 FlValue* value,
                                                 GError** error) {
+  if (fl_value_get_type(value) == FL_VALUE_TYPE_CUSTOM) {
+    switch (fl_value_get_custom_type(value)) {
+      case 128:
+        // FIXME
+        return TRUE;
+    }
+  }
+
   return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_parent_class)
       ->write_value(codec, buffer, value, error);
 }
@@ -83,8 +91,14 @@ static gboolean my_example_host_api_write_value(FlStandardMessageCodec* codec,
 static FlValue* my_example_host_api_read_value_of_type(
     FlStandardMessageCodec* codec, GByteArray* buffer, size_t* offset, int type,
     GError** error) {
-  return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_parent_class)
-      ->read_value_of_type(codec, buffer, offset, type, error);
+  switch (type) {
+    case 128:
+      // FIXME
+      return nullptr;
+    default:
+      return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_parent_class)
+          ->read_value_of_type(codec, buffer, offset, type, error);
+  }
 }
 
 static void my_example_host_api_codec_init(MyExampleHostApiCodec* self) {}
