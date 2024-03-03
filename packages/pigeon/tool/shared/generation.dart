@@ -15,6 +15,7 @@ enum GeneratorLanguage {
   dart,
   java,
   kotlin,
+  linux,
   objc,
   swift,
 }
@@ -191,6 +192,8 @@ Future<int> runPigeon({
   String? cppNamespace,
   String? dartOut,
   String? dartTestOut,
+  String? linuxHeaderOut,
+  String? linuxSourceOut,
   String? javaOut,
   String? javaPackage,
   String? objcHeaderOut,
@@ -257,6 +260,7 @@ Future<int> formatAllFiles({
     GeneratorLanguage.dart,
     GeneratorLanguage.java,
     GeneratorLanguage.kotlin,
+    GeneratorLanguage.linux,
     GeneratorLanguage.objc,
     GeneratorLanguage.swift,
   },
@@ -286,6 +290,10 @@ Future<int> formatAllFiles({
           '--kotlin'
         else
           '--no-kotlin',
+        if (languages.contains(GeneratorLanguage.linux))
+          '--linux'
+        else
+          '--no-linux',
         if (languages.contains(GeneratorLanguage.swift))
           '--swift'
         else
