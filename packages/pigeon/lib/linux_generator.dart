@@ -621,12 +621,12 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
 
       indent.newln();
       indent.writeln(
-          'return FL_STANDARD_MESSAGE_CODEC_CLASS(${methodPrefix}_parent_class)->write_value(codec, buffer, value, error);');
+          'return FL_STANDARD_MESSAGE_CODEC_CLASS(${codecMethodPrefix}_parent_class)->write_value(codec, buffer, value, error);');
     });
 
     indent.newln();
     indent.addScoped(
-        'static FlValue* ${methodPrefix}_read_value_of_type(FlStandardMessageCodec* codec, GByteArray* buffer, size_t* offset, int type, GError** error) {',
+        'static FlValue* ${methodPrefix}_read_value_of_type(FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, int type, GError** error) {',
         '}', () {
       indent.addScoped('switch (type) {', '}', () {
         for (final EnumeratedClass customClass in getCodecClasses(api, root)) {
@@ -985,11 +985,9 @@ void _writeClassInit(
 }
 
 void _writeObjectNew(Indent indent, String namespace, String name) {
-  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
   final String className = _getClassName(namespace, name);
-  final String snakeClassName = _snakeCaseFromCamelCase(name);
   final String methodPrefix = _getMethodPrefix(namespace, name);
-  final String castMacro = '${snakeNamespace}_$snakeClassName'.toUpperCase();
+  final String castMacro = _getClassCastMacro(namespace, name);
 
   indent.writeln(
       '$className* self = $castMacro(g_object_new(${methodPrefix}_get_type(), nullptr));');
@@ -997,11 +995,7 @@ void _writeObjectNew(Indent indent, String namespace, String name) {
 
 void _writeCastSelf(
     Indent indent, String namespace, String name, String variableName) {
-  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
-  final String className = _getClassName(namespace, name);
-  final String snakeClassName = _snakeCaseFromCamelCase(name);
-  final String castMacro = '${snakeNamespace}_$snakeClassName'.toUpperCase();
-
+  final String castMacro = _getClassCastMacro(namespace, name);
   indent.writeln('$className* self = $castMacro($variableName);');
 }
 
@@ -1012,6 +1006,13 @@ String _snakeCaseFromCamelCase(String camelCase) {
 
 String _getClassName(String namespace, String name) {
   return '$namespace$name';
+}
+
+String _getClassCastMacro(String namespace, String name) {
+  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+  final String className = _getClassName(namespace, name);
+  final String snakeClassName = _snakeCaseFromCamelCase(name);
+  return '${snakeNamespace}_$snakeClassName'.toUpperCase();
 }
 
 String _getResponseName(String name, String methodName) {
@@ -1032,7 +1033,7 @@ String _getEnumValue(String namespace, String enumName, String memberName) {
   return '${namespace}_${snakeEnumName}_$snakeMemberName'.toUpperCase();
 }
 
-String _getType(String namespace, TypeDeclaration type,
+String _<getType(String namespace, TypeDeclaration type,
     {bool isOutput = false}) {
   if (type.isEnum) {
     return _getClassName(namespace, type.baseName);
@@ -1117,7 +1118,7 @@ String _referenceValue(NamedType namedType, String variableName) {
 String _makeFlValue(
     String namespace, TypeDeclaration type, String variableName) {
   if (type.isClass) {
-    return 'fl_value_new_custom_object(0, $variableName)';
+    return 'fl_value_new_custom_object(0, G_OBJECT($variableName))';
   } else if (type.baseName == 'bool') {
     return 'fl_value_new_bool($variableName)';
   } else if (type.baseName == 'int') {
@@ -1132,7 +1133,8 @@ String _makeFlValue(
 String _fromFlValue(
     String namespace, TypeDeclaration type, String variableName) {
   if (type.isClass) {
-    return 'fl_value_get_custom_object($variableName)';
+    final String castMacro = _getClassCastMacro(namespace, type.baseName);
+    return '$castMacro(fl_value_get_custom_value_object($variableName))';
   } else if (type.baseName == 'bool') {
     return 'fl_value_get_bool($variableName)';
   } else if (type.baseName == 'int') {

@@ -84,19 +84,19 @@ static gboolean my_example_host_api_write_value(FlStandardMessageCodec* codec,
     }
   }
 
-  return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_parent_class)
+  return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_codec_parent_class)
       ->write_value(codec, buffer, value, error);
 }
 
 static FlValue* my_example_host_api_read_value_of_type(
-    FlStandardMessageCodec* codec, GByteArray* buffer, size_t* offset, int type,
+    FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, int type,
     GError** error) {
   switch (type) {
     case 128:
       // FIXME
       return nullptr;
     default:
-      return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_parent_class)
+      return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_codec_parent_class)
           ->read_value_of_type(codec, buffer, offset, type, error);
   }
 }
@@ -357,7 +357,7 @@ static void send_message_cb(
   }
 
   self->vtable->send_message(
-      self, fl_value_get_custom_object(fl_value_get_list_value(message, 0)),
+      self, MY_MESSAGE_DATA(fl_value_get_custom_value_object(fl_value_get_list_value(message, 0))),
       response_handle, self->user_data);
 }
 
