@@ -601,6 +601,22 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     _writeDefineType(indent, namespace, codecName,
         parentType: 'fl_standard_message_codec_get_type()');
 
+    for (final EnumeratedClass customClass in getCodecClasses(api, root)) {
+      final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+      final String snakeClassName = _snakeCaseFromCamelCase(customClass.name);
+      indent.newln();
+      indent.addScoped(
+          'static gboolean write_${snakeNamespace}_${snakeClassName}(FlStandardMessageCodec* codec, GByteArray* buffer, FlValue* value, GError** error) {',
+          '}', () {
+        indent.writeln('uint8_t type = ${customClass.enumeration};');
+        indent.writeln('g_byte_array_append(buffer, &type, sizeof(uint8_t));');
+        indent.writeln('g_autoptr(FlValue) values = fl_value_new_list();');
+        indent.writeln('// FIXME');
+        indent.writeln(
+            'return fl_standard_message_codec_write_value(codec, buffer, values, error);');
+      });
+    }
+
     indent.newln();
     indent.addScoped(
         'static gboolean ${methodPrefix}_write_value(FlStandardMessageCodec* codec, GByteArray* buffer, FlValue* value, GError** error) {',
@@ -612,8 +628,13 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
               in getCodecClasses(api, root)) {
             indent.writeln('case ${customClass.enumeration}:');
             indent.nest(1, () {
-              indent.writeln('// FIXME');
-              indent.writeln('return TRUE;');
+              final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+              final String snakeClassName =
+                  _snakeCaseFromCamelCase(customClass.name);
+              final String castMacro =
+                  _getClassCastMacro(namespace, customClass.name);
+              indent.writeln(
+                  'return write_${snakeNamespace}_${snakeClassName}(codec, buffer, $castMacro(fl_value_get_custom_value_object(value)), error);');
             });
           }
         });
@@ -624,6 +645,19 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           'return FL_STANDARD_MESSAGE_CODEC_CLASS(${codecMethodPrefix}_parent_class)->write_value(codec, buffer, value, error);');
     });
 
+    for (final EnumeratedClass customClass in getCodecClasses(api, root)) {
+      final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+      final String snakeClassName = _snakeCaseFromCamelCase(customClass.name);
+      indent.newln();
+      indent.addScoped(
+          'static gboolean read_${snakeNamespace}_${snakeClassName}(FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, GError** error) {',
+          '}', () {
+        indent.writeln('// FIXME');
+        indent.writeln(
+            'return fl_value_new_custom_object_take(${customClass.enumeration}, G_OBJECT(nullptr));');
+      });
+    }
+
     indent.newln();
     indent.addScoped(
         'static FlValue* ${methodPrefix}_read_value_of_type(FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, int type, GError** error) {',
@@ -632,8 +666,8 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         for (final EnumeratedClass customClass in getCodecClasses(api, root)) {
           indent.writeln('case ${customClass.enumeration}:');
           indent.nest(1, () {
-            indent.writeln('// FIXME');
-            indent.writeln('return nullptr;');
+            indent.writeln(
+                'return read_${snakeNamespace}_${snakeClassName}(codec, buffer, offset, error);');
           });
         }
 
@@ -1033,7 +1067,7 @@ String _getEnumValue(String namespace, String enumName, String memberName) {
   return '${namespace}_${snakeEnumName}_$snakeMemberName'.toUpperCase();
 }
 
-String _<getType(String namespace, TypeDeclaration type,
+String _getType(String namespace, TypeDeclaration type,
     {bool isOutput = false}) {
   if (type.isEnum) {
     return _getClassName(namespace, type.baseName);

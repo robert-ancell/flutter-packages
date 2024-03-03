@@ -72,6 +72,20 @@ struct _MyExampleHostApiCodec {
 G_DEFINE_TYPE(MyExampleHostApiCodec, my_example_host_api_codec,
               fl_standard_message_codec_get_type())
 
+static gboolean write_my_message_data(FlStandardMessageCodec* codec,
+				      GByteArray* buffer,
+				      MyMessageData *value,
+				      GError** error) {
+   uint8_t type = 128;
+   g_byte_array_append(buffer, &type, sizeof(uint8_t));
+   g_autoptr(FlValue) values = fl_value_new_list();
+   fl_value_append_take(values, fl_value_new_string(value->name));
+   fl_value_append_take(values, fl_value_new_string(value->description));
+   fl_value_append_take(values, fl_value_new_int(value->code));
+   fl_value_append(values, value->data);
+   return fl_standard_message_codec_write_value(codec, buffer, values, error);
+}
+
 static gboolean my_example_host_api_write_value(FlStandardMessageCodec* codec,
                                                 GByteArray* buffer,
                                                 FlValue* value,
@@ -79,8 +93,7 @@ static gboolean my_example_host_api_write_value(FlStandardMessageCodec* codec,
   if (fl_value_get_type(value) == FL_VALUE_TYPE_CUSTOM) {
     switch (fl_value_get_custom_type(value)) {
       case 128:
-        // FIXME
-        return TRUE;
+        return write_my_message_data(codec, buffer, MY_MESSAGE_DATA(fl_value_get_custom_value_object(value)), error);
     }
   }
 
@@ -88,13 +101,29 @@ static gboolean my_example_host_api_write_value(FlStandardMessageCodec* codec,
       ->write_value(codec, buffer, value, error);
 }
 
+static FlValue *read_my_message_data(FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, GError** error) {
+   g_autoptr(FlValue) values = fl_standard_message_codec_read_value(codec, buffer, offset, error);
+   if (values == nullptr) {
+      return nullptr;
+   }
+  if (fl_value_get_type(values) != FL_VALUE_TYPE_LIST ||
+      fl_value_get_type(fl_value_get_list_value(values, 0)) != FL_VALUE_TYPE_STRING ||
+      fl_value_get_type(fl_value_get_list_value(values, 1)) != FL_VALUE_TYPE_STRING ||
+      fl_value_get_type(fl_value_get_list_value(values, 2)) != FL_VALUE_TYPE_INT ||
+      fl_value_get_type(fl_value_get_list_value(values, 3)) != FL_VALUE_TYPE_MAP) {
+     g_set_error(error, FL_MESSAGE_CODEC_ERROR, FL_MESSAGE_CODEC_ERROR_FAILED, "Invalid data received for MessageData");
+     return nullptr;
+  }
+
+   return fl_value_new_custom_object_take(128, G_OBJECT(my_message_data_new(fl_value_get_string(fl_value_get_list_value(values, 0)), fl_value_get_string(fl_value_get_list_value(values, 1)), static_cast<MyCode>(fl_value_get_int(fl_value_get_list_value(values, 2))), fl_value_get_list_value(values, 3))));
+}
+
 static FlValue* my_example_host_api_read_value_of_type(
     FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, int type,
     GError** error) {
   switch (type) {
     case 128:
-      // FIXME
-      return nullptr;
+      return read_my_message_data(codec, buffer, offset, error);
     default:
       return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_codec_parent_class)
           ->read_value_of_type(codec, buffer, offset, type, error);
