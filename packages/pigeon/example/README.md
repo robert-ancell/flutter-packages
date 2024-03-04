@@ -192,11 +192,41 @@ class PigeonApiImplementation : public ExampleHostApi {
     result(true);
   }
 };
-
 ```
+
 ### Linux
+<?code-excerpt "linux/my_application.cc" (vtable)?>
 ```c++
-FIXME
+static MyExampleHostApiGetHostLanguageResponse* handle_get_host_language(
+    MyExampleHostApi* object, gpointer user_data) {
+  return my_example_host_api_get_host_language_response_new("C");
+}
+
+static MyExampleHostApiAddResponse* handle_add(MyExampleHostApi* object,
+                                               int64_t a, int64_t b,
+                                               gpointer user_data) {
+  if (a < 0 || b < 0) {
+    g_autoptr(FlValue) details = fl_value_new_string("details");
+    return my_example_host_api_add_response_new_error("code", "message",
+                                                      details);
+  }
+
+  return my_example_host_api_add_response_new(a + b);
+}
+
+static void handle_send_message(
+    MyExampleHostApi* object, MyMessageData* message,
+    FlBasicMessageChannelResponseHandle* response_handle, gpointer user_data) {
+  MyCode code = my_message_data_get_code(message);
+  if (code == MY_CODE_ONE) {
+    g_autoptr(FlValue) details = fl_value_new_string("details");
+    my_example_host_api_respond_error_send_message(object, response_handle,
+                                                   "code", "message", details);
+    return;
+  }
+
+  my_example_host_api_respond_send_message(object, response_handle, TRUE);
+}
 ```
 
 ## FlutterApi Example
@@ -284,8 +314,25 @@ void TestPlugin::CallFlutterMethod(
 
 ### Linux
 
+<?code-excerpt "linux/my_application.cc" (flutter-method-callback)?>
 ```c++
-FIXME
+static void flutter_method_cb(GObject *object, GAsyncResult *result, gpointer user_data)
+{
+  g_autofree gchar *return_value = nullptr;
+  g_autoptr(GError) error = nullptr;
+  if (!my_message_flutter_api_flutter_method_finish(MY_MESSAGE_FLUTTER_API(object), result, &return_value, &error)) {
+    g_warning("Failed to call Flutter method: %s", error->message);
+    return;
+  }
+
+  g_printerr("Got result from Flutter method: %s\n", return_value);
+}
+```
+
+<?code-excerpt "linux/my_application.cc" (flutter-method)?>
+```c++
+self->flutter_api = my_message_flutter_api_new(messenger);
+my_message_flutter_api_flutter_method_async(self->flutter_api, "hello", nullptr, flutter_method_cb, self);
 ```
 
 ## Swift / Kotlin Plugin Example

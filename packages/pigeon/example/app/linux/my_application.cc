@@ -13,13 +13,16 @@ struct _MyApplication {
   char** dart_entrypoint_arguments;
 
   MyExampleHostApi* example_host_api;
+
+  MyMessageFlutterApi* flutter_api;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+// #docregion vtable
 static MyExampleHostApiGetHostLanguageResponse* handle_get_host_language(
     MyExampleHostApi* object, gpointer user_data) {
-  return my_example_host_api_get_host_language_response_new("C");
+  return my_example_host_api_get_host_language_response_new("C++");
 }
 
 static MyExampleHostApiAddResponse* handle_add(MyExampleHostApi* object,
@@ -47,6 +50,21 @@ static void handle_send_message(
 
   my_example_host_api_respond_send_message(object, response_handle, TRUE);
 }
+// #enddocregion vtable
+
+// #docregion flutter-method-callback
+static void flutter_method_cb(GObject *object, GAsyncResult *result, gpointer user_data)
+{
+  g_autofree gchar *return_value = nullptr;
+  g_autoptr(GError) error = nullptr;
+  if (!my_message_flutter_api_flutter_method_finish(MY_MESSAGE_FLUTTER_API(object), result, &return_value, &error)) {
+    g_warning("Failed to call Flutter method: %s", error->message);
+    return;
+  }
+
+  g_printerr("Got result from Flutter method: %s\n", return_value);
+}
+// #enddocregion flutter-method-callback
 
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
@@ -104,6 +122,11 @@ static void my_application_activate(GApplication* application) {
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
+
+  // #docregion flutter-method
+  self->flutter_api = my_message_flutter_api_new(messenger);
+  my_message_flutter_api_flutter_method_async(self->flutter_api, "hello", nullptr, flutter_method_cb, self);
+  // #enddocregion flutter-method
 }
 
 // Implements GApplication::local_command_line.
