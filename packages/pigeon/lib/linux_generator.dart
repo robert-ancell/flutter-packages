@@ -488,6 +488,43 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         indent.writeln('return self->$fieldName;');
       });
     }
+
+    indent.newln();
+    indent.addScoped(
+        'static FlValue* ${methodPrefix}_to_list($className* self) {', '}', () {
+      indent.writeln('FlValue* values = fl_value_new_list();');
+      for (final NamedType field in classDefinition.fields) {
+        final String fieldName = _snakeCaseFromCamelCase(field.name);
+        indent.writeln(
+            'fl_value_append_take(values, ${_makeFlValue(namespace, field.type, 'self->$fieldName')});');
+      }
+      indent.writeln('return values;');
+    });
+
+    indent.newln();
+    indent.addScoped(
+        'static $className* ${methodPrefix}_new_from_list(FlValue* values) {',
+        '}', () {
+      final List<String> checks = <String>[
+        'fl_value_get_type(values) != FL_VALUE_TYPE_LIST'
+      ];
+      for (int i = 0; i < classDefinition.fields.length; i++) {
+        final NamedType field = classDefinition.fields[i];
+        checks.add(
+            'fl_value_get_type(fl_value_get_list_value(values, $i)) != ${_getFlValueType(field.type)}');
+      }
+      indent.addScoped("if (${checks.join(' || ')}) {", '}', () {
+        indent.writeln('return nullptr;');
+      });
+      indent.newln();
+      final List<String> args = <String>[];
+      for (int i = 0; i < classDefinition.fields.length; i++) {
+        final NamedType field = classDefinition.fields[i];
+        args.add(_fromFlValue(
+            namespace, field.type, 'fl_value_get_list_value(values, $i)'));
+      }
+      indent.writeln('return ${methodPrefix}_new(${args.join(', ')});');
+    });
   }
 
   @override
@@ -602,16 +639,17 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         parentType: 'fl_standard_message_codec_get_type()');
 
     for (final EnumeratedClass customClass in getCodecClasses(api, root)) {
-      final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
-      final String snakeClassName = _snakeCaseFromCamelCase(customClass.name);
+      final String customClassName = _getClassName(namespace, customClass.name);
+      final String snakeCustomClassName =
+          _snakeCaseFromCamelCase(customClassName);
       indent.newln();
       indent.addScoped(
-          'static gboolean write_${snakeNamespace}_${snakeClassName}(FlStandardMessageCodec* codec, GByteArray* buffer, FlValue* value, GError** error) {',
+          'static gboolean write_${snakeCustomClassName}(FlStandardMessageCodec* codec, GByteArray* buffer, $customClassName* value, GError** error) {',
           '}', () {
         indent.writeln('uint8_t type = ${customClass.enumeration};');
         indent.writeln('g_byte_array_append(buffer, &type, sizeof(uint8_t));');
-        indent.writeln('g_autoptr(FlValue) values = fl_value_new_list();');
-        indent.writeln('// FIXME');
+        indent.writeln(
+            'g_autoptr(FlValue) values = ${snakeCustomClassName}_to_list(value);');
         indent.writeln(
             'return fl_standard_message_codec_write_value(codec, buffer, values, error);');
       });
@@ -646,15 +684,29 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     });
 
     for (final EnumeratedClass customClass in getCodecClasses(api, root)) {
-      final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
-      final String snakeClassName = _snakeCaseFromCamelCase(customClass.name);
+      final String customClassName = _getClassName(namespace, customClass.name);
+      final String snakeCustomClassName =
+          _snakeCaseFromCamelCase(customClassName);
       indent.newln();
       indent.addScoped(
-          'static gboolean read_${snakeNamespace}_${snakeClassName}(FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, GError** error) {',
+          'static FlValue* read_${snakeCustomClassName}(FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, GError** error) {',
           '}', () {
-        indent.writeln('// FIXME');
         indent.writeln(
-            'return fl_value_new_custom_object_take(${customClass.enumeration}, G_OBJECT(nullptr));');
+            'g_autoptr(FlValue) values = fl_standard_message_codec_read_value(codec, buffer, offset, error);');
+        indent.addScoped('if (values == nullptr) {', '}', () {
+          indent.writeln('return nullptr;');
+        });
+        indent.newln();
+        indent.writeln(
+            'g_autoptr($customClassName) value = ${snakeCustomClassName}_new_from_list(values);');
+        indent.addScoped('if (value == nullptr) {', '}', () {
+          indent.writeln(
+              'g_set_error(error, FL_MESSAGE_CODEC_ERROR, FL_MESSAGE_CODEC_ERROR_FAILED, "Invalid data received for MessageData");');
+          indent.writeln('return nullptr;');
+        });
+        indent.newln();
+        indent.writeln(
+            'return fl_value_new_custom_object_take(${customClass.enumeration}, G_OBJECT(value));');
       });
     }
 
@@ -761,7 +813,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
     indent.newln();
     _writeObjectStruct(indent, namespace, api.name, () {
       indent.writeln('FlBinaryMessenger* messenger;');
-      indent.writeln('const MyExampleHostApiVTable* vtable;');
+      indent.writeln('const ${className}VTable* vtable;');
       indent.writeln('gpointer user_data;');
       indent.writeln('GDestroyNotify user_data_free_func;');
 
@@ -828,7 +880,8 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           indent.writeln(
               "g_autoptr($responseClassName) response = self->vtable->$methodName(${vfuncArgs.join(', ')});");
           indent.addScoped('if (response == nullptr) {', '}', () {
-            indent.writeln('g_warning("No response returned to FIXME");');
+            indent.writeln(
+                'g_warning("No response returned to ${api.name}.${method.name}");');
             indent.writeln('return;');
           });
 
@@ -838,7 +891,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
               'if (!fl_basic_message_channel_respond(channel, response_handle, response->value, &error)) {',
               '}', () {
             indent.writeln(
-                'g_warning("Failed to send response to FIXME: %s", error->message);');
+                'g_warning("Failed to send response to ${api.name}.${method.name}: %s", error->message);');
           });
         }
       });
@@ -918,7 +971,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
             'if (!fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, response->value, &error)) {',
             '}', () {
           indent.writeln(
-              'g_warning("Failed to send response to FIXME: %s", error->message);');
+              'g_warning("Failed to send response to ${api.name}.${method.name}: %s", error->message);');
         });
       });
 
@@ -940,7 +993,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
             'if (!fl_basic_message_channel_respond(self->${methodName}_channel, response_handle, response->value, &error)) {',
             '}', () {
           indent.writeln(
-              'g_warning("Failed to send response to FIXME: %s", error->message);');
+              'g_warning("Failed to send response to ${api.name}.${method.name}: %s", error->message);');
         });
       });
     }
@@ -1172,6 +1225,8 @@ String _makeFlValue(
     return 'fl_value_new_int($variableName)';
   } else if (type.baseName == 'double') {
     return 'fl_value_new_double($variableName)';
+  } else if (type.baseName == 'String') {
+    return 'fl_value_new_string($variableName)';
   } else {
     return 'fl_value_new_null()';
   }
@@ -1182,12 +1237,16 @@ String _fromFlValue(
   if (type.isClass) {
     final String castMacro = _getClassCastMacro(namespace, type.baseName);
     return '$castMacro(fl_value_get_custom_value_object($variableName))';
+  } else if (type.baseName == 'Map') {
+    return variableName;
   } else if (type.baseName == 'bool') {
     return 'fl_value_get_bool($variableName)';
   } else if (type.baseName == 'int') {
     return 'fl_value_get_int($variableName)';
   } else if (type.baseName == 'double') {
     return 'fl_value_get_double($variableName)';
+  } else if (type.baseName == 'String') {
+    return 'fl_value_get_string($variableName)';
   } else {
     return 'nullptr';
   }
@@ -1196,12 +1255,16 @@ String _fromFlValue(
 String _getFlValueType(TypeDeclaration type) {
   if (type.isClass) {
     return 'FL_VALUE_TYPE_CUSTOM';
+  } else if (type.baseName == 'Map') {
+    return 'FL_VALUE_TYPE_MAP';
   } else if (type.baseName == 'bool') {
     return 'FL_VALUE_TYPE_BOOL';
   } else if (type.baseName == 'int') {
     return 'FL_VALUE_TYPE_INT';
   } else if (type.baseName == 'double') {
     return 'FL_VALUE_TYPE_DOUBLE';
+  } else if (type.baseName == 'String') {
+    return 'FL_VALUE_TYPE_STRING';
   } else {
     return 'FIXME';
   }
