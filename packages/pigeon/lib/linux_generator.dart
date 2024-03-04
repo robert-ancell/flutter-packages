@@ -288,7 +288,7 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
       final String returnType = _getType(namespace, method.returnType);
       indent.newln();
       indent.writeln(
-          "$responseClassName* ${responseMethodPrefix}_new($returnType return_value);");
+          '$responseClassName* ${responseMethodPrefix}_new($returnType return_value);');
 
       indent.newln();
       indent.writeln(
@@ -644,7 +644,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           _snakeCaseFromCamelCase(customClassName);
       indent.newln();
       indent.addScoped(
-          'static gboolean write_${snakeCustomClassName}(FlStandardMessageCodec* codec, GByteArray* buffer, $customClassName* value, GError** error) {',
+          'static gboolean write_$snakeCustomClassName(FlStandardMessageCodec* codec, GByteArray* buffer, $customClassName* value, GError** error) {',
           '}', () {
         indent.writeln('uint8_t type = ${customClass.enumeration};');
         indent.writeln('g_byte_array_append(buffer, &type, sizeof(uint8_t));');
@@ -672,7 +672,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
               final String castMacro =
                   _getClassCastMacro(namespace, customClass.name);
               indent.writeln(
-                  'return write_${snakeNamespace}_${snakeClassName}(codec, buffer, $castMacro(fl_value_get_custom_value_object(value)), error);');
+                  'return write_${snakeNamespace}_$snakeClassName(codec, buffer, $castMacro(fl_value_get_custom_value_object(value)), error);');
             });
           }
         });
@@ -689,7 +689,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           _snakeCaseFromCamelCase(customClassName);
       indent.newln();
       indent.addScoped(
-          'static FlValue* read_${snakeCustomClassName}(FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, GError** error) {',
+          'static FlValue* read_$snakeCustomClassName(FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, GError** error) {',
           '}', () {
         indent.writeln(
             'g_autoptr(FlValue) values = fl_standard_message_codec_read_value(codec, buffer, offset, error);');
@@ -722,7 +722,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           indent.writeln('case ${customClass.enumeration}:');
           indent.nest(1, () {
             indent.writeln(
-                'return read_${snakeNamespace}_${snakeClassName}(codec, buffer, offset, error);');
+                'return read_${snakeNamespace}_$snakeClassName(codec, buffer, offset, error);');
           });
         }
 
@@ -871,7 +871,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         if (method.isAsynchronous) {
           final List<String> vfuncArgs = <String>['self'];
           vfuncArgs.addAll(methodArgs);
-          vfuncArgs.addAll(['response_handle', 'self->user_data']);
+          vfuncArgs.addAll(<String>['response_handle', 'self->user_data']);
           indent.writeln("self->vtable->$methodName(${vfuncArgs.join(', ')});");
         } else {
           final List<String> vfuncArgs = <String>['self'];
