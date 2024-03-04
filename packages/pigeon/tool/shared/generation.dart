@@ -274,6 +274,7 @@ Future<int> formatAllFiles({
         'format',
         '--packages=pigeon',
         if (languages.contains(GeneratorLanguage.cpp) ||
+            languages.contains(GeneratorLanguage.linux) ||
             languages.contains(GeneratorLanguage.objc))
           '--clang-format'
         else
