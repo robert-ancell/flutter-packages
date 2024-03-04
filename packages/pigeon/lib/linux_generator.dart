@@ -784,7 +784,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         _writeCastSelf(indent, namespace, api.name, 'user_data');
 
         indent.newln();
-        indent.addScoped('if (self->vtable->$methodName == nullptr) {', '}',
+        indent.addScoped('if (self->vtable == nullptr || self->vtable->$methodName == nullptr) {', '}',
             () {
           indent.writeln('return;');
         });
@@ -863,6 +863,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         '}', () {
       _writeObjectNew(indent, namespace, api.name);
       indent.writeln('self->messenger = g_object_ref(messenger);');
+      indent.writeln('self->vtable = vtable;');
       indent.writeln('self->user_data = user_data;');
       indent.writeln('self->user_data_free_func = user_data_free_func;');
 

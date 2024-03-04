@@ -315,7 +315,7 @@ static void get_host_language_cb(
     FlBasicMessageChannelResponseHandle* response_handle, gpointer user_data) {
   MyExampleHostApi* self = MY_EXAMPLE_HOST_API(user_data);
 
-  if (self->vtable->get_host_language == nullptr) {
+  if (self->vtable == nullptr || self->vtable->get_host_language == nullptr) {
     return;
   }
 
@@ -342,7 +342,7 @@ static void add_cb(FlBasicMessageChannel* channel, FlValue* message,
                    gpointer user_data) {
   MyExampleHostApi* self = MY_EXAMPLE_HOST_API(user_data);
 
-  if (self->vtable->add == nullptr) {
+  if (self->vtable == nullptr || self->vtable->add == nullptr) {
     return;
   }
 
@@ -374,7 +374,7 @@ static void send_message_cb(
     FlBasicMessageChannelResponseHandle* response_handle, gpointer user_data) {
   MyExampleHostApi* self = MY_EXAMPLE_HOST_API(user_data);
 
-  if (self->vtable->send_message == nullptr) {
+  if (self->vtable == nullptr || self->vtable->send_message == nullptr) {
     return;
   }
 
@@ -417,6 +417,7 @@ MyExampleHostApi* my_example_host_api_new(FlBinaryMessenger* messenger,
   MyExampleHostApi* self = MY_EXAMPLE_HOST_API(
       g_object_new(my_example_host_api_get_type(), nullptr));
   self->messenger = g_object_ref(messenger);
+  self->vtable = vtable;
   self->user_data = user_data;
   self->user_data_free_func = user_data_free_func;
 
