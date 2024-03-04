@@ -62,12 +62,12 @@ FlValue* my_message_data_get_data(MyMessageData* self) {
   return self->data;
 }
 
-static FlValue* my_message_data_to_list(MyMessageData* value) {
+static FlValue* my_message_data_to_list(MyMessageData* self) {
   FlValue* values = fl_value_new_list();
-  fl_value_append_take(values, fl_value_new_string(value->name));
-  fl_value_append_take(values, fl_value_new_string(value->description));
-  fl_value_append_take(values, fl_value_new_int(value->code));
-  fl_value_append(values, value->data);
+  fl_value_append_take(values, fl_value_new_string(self->name));
+  fl_value_append_take(values, fl_value_new_string(self->description));
+  fl_value_append_take(values, fl_value_new_int(self->code));
+  fl_value_append(values, self->data);
   return values;
 }
 
