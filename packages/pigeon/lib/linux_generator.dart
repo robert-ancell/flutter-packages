@@ -677,7 +677,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         indent.writeln('default:');
         indent.nest(1, () {
           indent.writeln(
-              'return FL_STANDARD_MESSAGE_CODEC_CLASS(${methodPrefix}_parent_class)->read_value_of_type(codec, buffer, offset, type, error);');
+              'return FL_STANDARD_MESSAGE_CODEC_CLASS(${codecMethodPrefix}_parent_class)->read_value_of_type(codec, buffer, offset, type, error);');
         });
       });
     });
