@@ -390,6 +390,7 @@ static void add_cb(FlBasicMessageChannel* channel, FlValue* message,
       fl_value_get_int(fl_value_get_list_value(message, 1)), self->user_data);
   if (response == nullptr) {
     g_warning("No response returned to ExampleHostApi.add");
+    return;
   }
 
   g_autoptr(GError) error = NULL;
