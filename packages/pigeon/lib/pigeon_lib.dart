@@ -2371,8 +2371,3 @@ ${_argParser.usage}''';
     }
   }
 }
-
-String _snakeCaseFromCamelCase(String camelCase) {
-  return camelCase.replaceAllMapped(RegExp(r'[A-Z]'),
-      (Match m) => '${m.start == 0 ? '' : '_'}${m[0]!.toLowerCase()}');
-}
