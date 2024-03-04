@@ -62,19 +62,10 @@ FlValue* my_message_data_get_data(MyMessageData* self) {
   return self->data;
 }
 
-G_DECLARE_FINAL_TYPE(MyExampleHostApiCodec, my_example_host_api_codec, MY,
-                     EXAMPLE_HOST_API_CODEC, FlStandardMessageCodec)
-
-struct _MyExampleHostApiCodec {
-  FlStandardMessageCodec parent_instance;
-};
-
-G_DEFINE_TYPE(MyExampleHostApiCodec, my_example_host_api_codec,
-              fl_standard_message_codec_get_type())
-
-static gboolean write_my_message_data(FlStandardMessageCodec* codec,
-                                      GByteArray* buffer, MyMessageData* value,
-                                      GError** error) {
+static gboolean my_message_data_write_value(FlStandardMessageCodec* codec,
+                                            GByteArray* buffer,
+                                            MyMessageData* value,
+                                            GError** error) {
   uint8_t type = 128;
   g_byte_array_append(buffer, &type, sizeof(uint8_t));
   g_autoptr(FlValue) values = fl_value_new_list();
@@ -85,26 +76,9 @@ static gboolean write_my_message_data(FlStandardMessageCodec* codec,
   return fl_standard_message_codec_write_value(codec, buffer, values, error);
 }
 
-static gboolean my_example_host_api_write_value(FlStandardMessageCodec* codec,
-                                                GByteArray* buffer,
-                                                FlValue* value,
-                                                GError** error) {
-  if (fl_value_get_type(value) == FL_VALUE_TYPE_CUSTOM) {
-    switch (fl_value_get_custom_type(value)) {
-      case 128:
-        return write_my_message_data(
-            codec, buffer,
-            MY_MESSAGE_DATA(fl_value_get_custom_value_object(value)), error);
-    }
-  }
-
-  return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_codec_parent_class)
-      ->write_value(codec, buffer, value, error);
-}
-
-static FlValue* read_my_message_data(FlStandardMessageCodec* codec,
-                                     GBytes* buffer, size_t* offset,
-                                     GError** error) {
+static FlValue* my_message_data_read_value(FlStandardMessageCodec* codec,
+                                           GBytes* buffer, size_t* offset,
+                                           GError** error) {
   g_autoptr(FlValue) values =
       fl_standard_message_codec_read_value(codec, buffer, offset, error);
   if (values == nullptr) {
@@ -133,12 +107,39 @@ static FlValue* read_my_message_data(FlStandardMessageCodec* codec,
                fl_value_get_list_value(values, 3))));
 }
 
+G_DECLARE_FINAL_TYPE(MyExampleHostApiCodec, my_example_host_api_codec, MY,
+                     EXAMPLE_HOST_API_CODEC, FlStandardMessageCodec)
+
+struct _MyExampleHostApiCodec {
+  FlStandardMessageCodec parent_instance;
+};
+
+G_DEFINE_TYPE(MyExampleHostApiCodec, my_example_host_api_codec,
+              fl_standard_message_codec_get_type())
+
+static gboolean my_example_host_api_write_value(FlStandardMessageCodec* codec,
+                                                GByteArray* buffer,
+                                                FlValue* value,
+                                                GError** error) {
+  if (fl_value_get_type(value) == FL_VALUE_TYPE_CUSTOM) {
+    switch (fl_value_get_custom_type(value)) {
+      case 128:
+        return my_message_data_write_value(
+            codec, buffer,
+            MY_MESSAGE_DATA(fl_value_get_custom_value_object(value)), error);
+    }
+  }
+
+  return FL_STANDARD_MESSAGE_CODEC_CLASS(my_example_host_api_codec_parent_class)
+      ->write_value(codec, buffer, value, error);
+}
+
 static FlValue* my_example_host_api_read_value_of_type(
     FlStandardMessageCodec* codec, GBytes* buffer, size_t* offset, int type,
     GError** error) {
   switch (type) {
     case 128:
-      return read_my_message_data(codec, buffer, offset, error);
+      return my_message_data_read_value(codec, buffer, offset, error);
     default:
       return FL_STANDARD_MESSAGE_CODEC_CLASS(
                  my_example_host_api_codec_parent_class)
