@@ -719,7 +719,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       indent.newln();
       _writeDispose(indent, namespace, responseName, () {
         _writeCastSelf(indent, namespace, responseName, 'object');
-        indent.writeln('g_clear_object(&self->value);');
+        indent.writeln('g_clear_pointer(&self->value, fl_value_unref);');
       });
 
       indent.newln();
@@ -784,22 +784,27 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         _writeCastSelf(indent, namespace, api.name, 'user_data');
 
         indent.newln();
-        indent.addScoped('if (self->vtable == nullptr || self->vtable->$methodName == nullptr) {', '}',
-            () {
+        indent.addScoped(
+            'if (self->vtable == nullptr || self->vtable->$methodName == nullptr) {',
+            '}', () {
           indent.writeln('return;');
         });
 
-        final List<String> checks = <String>[
-          'fl_value_get_type(message) != FL_VALUE_TYPE_LIST',
-          'fl_value_get_length(message) != ${method.parameters.length}'
-        ];
-        final List<String> methodArgs = <String>[];
-        for (int i = 0; i < method.parameters.length; i++) {
-          final Parameter param = method.parameters[i];
+        final List<String> checks = <String>[];
+        if (method.parameters.isEmpty) {
+          checks.add('fl_value_get_type(message) != FL_VALUE_TYPE_NULL');
+        } else {
+          checks.add('fl_value_get_type(message) != FL_VALUE_TYPE_LIST');
           checks.add(
-              'fl_value_get_type(fl_value_get_list_value(message, $i)) != ${_getFlValueType(param.type)}');
-          methodArgs.add(_fromFlValue(
-              namespace, param.type, 'fl_value_get_list_value(message, $i)'));
+              'fl_value_get_length(message) != ${method.parameters.length}');
+          final List<String> methodArgs = <String>[];
+          for (int i = 0; i < method.parameters.length; i++) {
+            final Parameter param = method.parameters[i];
+            checks.add(
+                'fl_value_get_type(fl_value_get_list_value(message, $i)) != ${_getFlValueType(param.type)}');
+            methodArgs.add(_fromFlValue(
+                namespace, param.type, 'fl_value_get_list_value(message, $i)'));
+          }
         }
 
         indent.newln();
@@ -820,7 +825,8 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
           indent.writeln(
               "g_autoptr($responseClassName) response = self->vtable->$methodName(${vfuncArgs.join(', ')});");
           indent.addScoped('if (response == nullptr) {', '}', () {
-            indent.writeln('g_warning("Not response returned to FIXME");');
+            indent.writeln('g_warning("No response returned to FIXME");');
+            indent.writeln('return;');
           });
 
           indent.newln();
@@ -1112,8 +1118,10 @@ String _getLocalType(String namespace, TypeDeclaration type) {
 String? _getClear(NamedType namedType, String variableName) {
   final TypeDeclaration type = namedType.type;
 
-  if (type.isClass || type.baseName == 'Map') {
+  if (type.isClass) {
     return 'g_clear_object(&$variableName)';
+  } else if (type.baseName == 'Map') {
+    return 'g_clear_pointer(&$variableName, fl_value_unref)';
   } else if (type.baseName == 'String') {
     return 'g_clear_pointer(&$variableName, g_free)';
   } else {

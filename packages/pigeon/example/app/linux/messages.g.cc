@@ -21,7 +21,7 @@ static void my_message_data_dispose(GObject* object) {
   MyMessageData* self = MY_MESSAGE_DATA(object);
   g_clear_pointer(&self->name, g_free);
   g_clear_pointer(&self->description, g_free);
-  g_clear_object(&self->data);
+  g_clear_pointer(&self->data, fl_value_unref);
   G_OBJECT_CLASS(my_message_data_parent_class)->dispose(object);
 }
 
@@ -159,7 +159,7 @@ static void my_example_host_api_get_host_language_response_dispose(
     GObject* object) {
   MyExampleHostApiGetHostLanguageResponse* self =
       MY_EXAMPLE_HOST_API_GET_HOST_LANGUAGE_RESPONSE(object);
-  g_clear_object(&self->value);
+  g_clear_pointer(&self->value, fl_value_unref);
   G_OBJECT_CLASS(my_example_host_api_get_host_language_response_parent_class)
       ->dispose(object);
 }
@@ -179,7 +179,7 @@ my_example_host_api_get_host_language_response_new(const gchar* return_value) {
       MY_EXAMPLE_HOST_API_GET_HOST_LANGUAGE_RESPONSE(g_object_new(
           my_example_host_api_get_host_language_response_get_type(), nullptr));
   self->value = fl_value_new_list();
-  fl_value_append_take(self->value, fl_value_new_null());
+  fl_value_append_take(self->value, fl_value_new_string(return_value));
   return self;
 }
 
@@ -208,7 +208,7 @@ G_DEFINE_TYPE(MyExampleHostApiAddResponse, my_example_host_api_add_response,
 
 static void my_example_host_api_add_response_dispose(GObject* object) {
   MyExampleHostApiAddResponse* self = MY_EXAMPLE_HOST_API_ADD_RESPONSE(object);
-  g_clear_object(&self->value);
+  g_clear_pointer(&self->value, fl_value_unref);
   G_OBJECT_CLASS(my_example_host_api_add_response_parent_class)
       ->dispose(object);
 }
@@ -257,7 +257,7 @@ G_DEFINE_TYPE(MyExampleHostApiSendMessageResponse,
 static void my_example_host_api_send_message_response_dispose(GObject* object) {
   MyExampleHostApiSendMessageResponse* self =
       MY_EXAMPLE_HOST_API_SEND_MESSAGE_RESPONSE(object);
-  g_clear_object(&self->value);
+  g_clear_pointer(&self->value, fl_value_unref);
   G_OBJECT_CLASS(my_example_host_api_send_message_response_parent_class)
       ->dispose(object);
 }
@@ -319,21 +319,21 @@ static void get_host_language_cb(
     return;
   }
 
-  if (fl_value_get_type(message) != FL_VALUE_TYPE_LIST ||
-      fl_value_get_length(message) != 0) {
+  if (fl_value_get_type(message) != FL_VALUE_TYPE_NULL) {
     return;
   }
 
   g_autoptr(MyExampleHostApiGetHostLanguageResponse) response =
       self->vtable->get_host_language(self, self->user_data);
   if (response == nullptr) {
-    g_warning("Not response returned to FIXME");
+    g_warning("No response returned to ExampleHostApi.getHostLanguage");
+     return;
   }
 
   g_autoptr(GError) error = NULL;
   if (!fl_basic_message_channel_respond(channel, response_handle,
                                         response->value, &error)) {
-    g_warning("Failed to send response to FIXME: %s", error->message);
+    g_warning("Failed to send response to ExampleHostApi.getHostLanguage: %s", error->message);
   }
 }
 
@@ -359,13 +359,13 @@ static void add_cb(FlBasicMessageChannel* channel, FlValue* message,
       self, fl_value_get_int(fl_value_get_list_value(message, 0)),
       fl_value_get_int(fl_value_get_list_value(message, 1)), self->user_data);
   if (response == nullptr) {
-    g_warning("Not response returned to FIXME");
+    g_warning("No response returned to ExampleHostApi.add");
   }
 
   g_autoptr(GError) error = NULL;
   if (!fl_basic_message_channel_respond(channel, response_handle,
                                         response->value, &error)) {
-    g_warning("Failed to send response to FIXME: %s", error->message);
+    g_warning("Failed to send response to ExampleHostApi.add: %s", error->message);
   }
 }
 
@@ -454,7 +454,7 @@ void my_example_host_api_respond_send_message(
   if (!fl_basic_message_channel_respond(self->send_message_channel,
                                         response_handle, response->value,
                                         &error)) {
-    g_warning("Failed to send response to FIXME: %s", error->message);
+    g_warning("Failed to send response to ExampleHostApi.sendMessage: %s", error->message);
   }
 }
 
@@ -469,7 +469,7 @@ void my_example_host_api_respond_error_send_message(
   if (!fl_basic_message_channel_respond(self->send_message_channel,
                                         response_handle, response->value,
                                         &error)) {
-    g_warning("Failed to send response to FIXME: %s", error->message);
+    g_warning("Failed to send response to ExampleHostApi.sendMessage: %s", error->message);
   }
 }
 
