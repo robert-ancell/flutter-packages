@@ -1133,10 +1133,10 @@ String _getEnumValue(String namespace, String enumName, String memberName) {
 
 String _getType(String namespace, TypeDeclaration type,
     {bool isOutput = false}) {
-  if (type.isEnum) {
-    return _getClassName(namespace, type.baseName);
-  } else if (type.isClass) {
+  if (type.isClass) {
     return '${_getClassName(namespace, type.baseName)}*';
+  } else if (type.isEnum) {
+    return _getClassName(namespace, type.baseName);
   } else if (type.baseName == 'void') {
     return 'void';
   } else if (type.baseName == 'bool') {
@@ -1150,7 +1150,7 @@ String _getType(String namespace, TypeDeclaration type,
   } else if (type.baseName == 'Map') {
     return 'FlValue*';
   } else {
-    return 'FlValue(${type.baseName})*';
+    throw Exception('Unknown type ${type.baseName}');
   }
 }
 
@@ -1163,12 +1163,12 @@ String _getLocalType(String namespace, TypeDeclaration type) {
     return _getType(namespace, type);
   } else if (type.isClass) {
     return 'g_autoptr(${_getClassName(namespace, type.baseName)})';
+  } else if (type.baseName == 'List' || type.baseName == 'Map') {
+    return 'g_autoptr(FlValue)';
   } else if (type.baseName == 'String') {
     return 'g_autofree gchar*';
-  } else if (type.baseName == 'Map') {
-    return 'g_autoptr(FlValue)';
   } else {
-    return 'g_autoptr(FlValue)';
+    throw Exception('Unknown type ${type.baseName}');
   }
 }
 
@@ -1177,7 +1177,7 @@ String? _getClear(NamedType namedType, String variableName) {
 
   if (type.isClass) {
     return 'g_clear_object(&$variableName)';
-  } else if (type.baseName == 'Map') {
+  } else if (type.baseName == 'List' || type.baseName == 'Map') {
     return 'g_clear_pointer(&$variableName, fl_value_unref)';
   } else if (type.baseName == 'String') {
     return 'g_clear_pointer(&$variableName, g_free)';
@@ -1187,9 +1187,13 @@ String? _getClear(NamedType namedType, String variableName) {
 }
 
 String _getDefaultValue(String namespace, TypeDeclaration type) {
-  if (type.isEnum) {
+  if (type.isClass) {
+    return 'nullptr';
+  } else if (type.isEnum) {
     final String enumName = _getClassName(namespace, type.baseName);
     return 'static_cast<$enumName>(0)';
+  } else if (type.baseName == 'List' || type.baseName == 'Map') {
+    return 'nullptr';
   } else if (type.baseName == 'void') {
     return '';
   } else if (type.baseName == 'bool') {
@@ -1198,15 +1202,17 @@ String _getDefaultValue(String namespace, TypeDeclaration type) {
     return '0';
   } else if (type.baseName == 'double') {
     return '0.0';
-  } else {
+  } else if (type.baseName == 'String') {
     return 'nullptr';
+  } else {
+    throw Exception('Unknown type ${type.baseName}');
   }
 }
 
 String _referenceValue(NamedType namedType, String variableName) {
   final TypeDeclaration type = namedType.type;
 
-  if (type.isClass || type.baseName == 'Map') {
+  if (type.isClass || type.baseName == 'List' || type.baseName == 'Map') {
     return 'g_object_ref($variableName)';
   } else if (type.baseName == 'String') {
     return 'g_strdup($variableName)';
@@ -1219,6 +1225,10 @@ String _makeFlValue(
     String namespace, TypeDeclaration type, String variableName) {
   if (type.isClass) {
     return 'fl_value_new_custom_object(0, G_OBJECT($variableName))';
+  } else if (type.isEnum) {
+    return 'fl_value_new_int($variableName)';
+  } else if (type.baseName == 'List' || type.baseName == 'Map') {
+    return 'fl_value_ref($variableName)';
   } else if (type.baseName == 'bool') {
     return 'fl_value_new_bool($variableName)';
   } else if (type.baseName == 'int') {
@@ -1228,7 +1238,7 @@ String _makeFlValue(
   } else if (type.baseName == 'String') {
     return 'fl_value_new_string($variableName)';
   } else {
-    return 'fl_value_new_null()';
+    throw Exception('Unknown type ${type.baseName}');
   }
 }
 
@@ -1237,7 +1247,10 @@ String _fromFlValue(
   if (type.isClass) {
     final String castMacro = _getClassCastMacro(namespace, type.baseName);
     return '$castMacro(fl_value_get_custom_value_object($variableName))';
-  } else if (type.baseName == 'Map') {
+  } else if (type.isEnum) {
+    final String enumName = _getClassName(namespace, type.baseName);
+    return 'static_cast<$enumName>(fl_value_get_int($variableName))';
+  } else if (type.baseName == 'List' || type.baseName == 'Map') {
     return variableName;
   } else if (type.baseName == 'bool') {
     return 'fl_value_get_bool($variableName)';
@@ -1248,13 +1261,17 @@ String _fromFlValue(
   } else if (type.baseName == 'String') {
     return 'fl_value_get_string($variableName)';
   } else {
-    return 'nullptr';
+    throw Exception('Unknown type ${type.baseName}');
   }
 }
 
 String _getFlValueType(TypeDeclaration type) {
   if (type.isClass) {
     return 'FL_VALUE_TYPE_CUSTOM';
+  } else if (type.isEnum) {
+    return 'FL_VALUE_TYPE_INT';
+  } else if (type.baseName == 'List') {
+    return 'FL_VALUE_TYPE_LIST';
   } else if (type.baseName == 'Map') {
     return 'FL_VALUE_TYPE_MAP';
   } else if (type.baseName == 'bool') {
@@ -1266,6 +1283,6 @@ String _getFlValueType(TypeDeclaration type) {
   } else if (type.baseName == 'String') {
     return 'FL_VALUE_TYPE_STRING';
   } else {
-    return 'FIXME';
+    throw Exception('Unknown type ${type.baseName}');
   }
 }
