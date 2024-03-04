@@ -664,6 +664,9 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         '}', () {
       indent.addScoped('switch (type) {', '}', () {
         for (final EnumeratedClass customClass in getCodecClasses(api, root)) {
+          final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
+          final String snakeClassName =
+              _snakeCaseFromCamelCase(customClass.name);
           indent.writeln('case ${customClass.enumeration}:');
           indent.nest(1, () {
             indent.writeln(
@@ -791,13 +794,13 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
         });
 
         final List<String> checks = <String>[];
+        final List<String> methodArgs = <String>[];
         if (method.parameters.isEmpty) {
           checks.add('fl_value_get_type(message) != FL_VALUE_TYPE_NULL');
         } else {
           checks.add('fl_value_get_type(message) != FL_VALUE_TYPE_LIST');
           checks.add(
               'fl_value_get_length(message) != ${method.parameters.length}');
-          final List<String> methodArgs = <String>[];
           for (int i = 0; i < method.parameters.length; i++) {
             final Parameter param = method.parameters[i];
             checks.add(
@@ -1036,6 +1039,7 @@ void _writeObjectNew(Indent indent, String namespace, String name) {
 
 void _writeCastSelf(
     Indent indent, String namespace, String name, String variableName) {
+  final String className = _getClassName(namespace, name);
   final String castMacro = _getClassCastMacro(namespace, name);
   indent.writeln('$className* self = $castMacro($variableName);');
 }
