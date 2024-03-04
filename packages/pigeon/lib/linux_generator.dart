@@ -438,7 +438,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       bool haveSelf = false;
       for (final NamedType field in classDefinition.fields) {
         final String fieldName = _snakeCaseFromCamelCase(field.name);
-        final String? clear = _getClear(field, 'self->$fieldName');
+        final String? clear = _getClearFunction(field.type, 'self->$fieldName');
         if (clear != null) {
           if (!haveSelf) {
             _writeCastSelf(indent, namespace, classDefinition.name, 'object');
@@ -468,7 +468,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
       _writeObjectNew(indent, namespace, classDefinition.name);
       for (final NamedType field in classDefinition.fields) {
         final String fieldName = _snakeCaseFromCamelCase(field.name);
-        final String value = _referenceValue(field, fieldName);
+        final String value = _referenceValue(field.type, fieldName);
 
         indent.writeln('self->$fieldName = $value;');
       }
@@ -1000,6 +1000,7 @@ class LinuxSourceGenerator extends StructuredGenerator<LinuxOptions> {
   }
 }
 
+// Returns the header guard defintion for [headerFileName].
 String _getGuardName(String? headerFileName) {
   const String prefix = 'PIGEON_';
   if (headerFileName != null) {
@@ -1009,6 +1010,7 @@ String _getGuardName(String? headerFileName) {
   }
 }
 
+// Writes the GObject macro to generate a new type.
 void _writeDeclareFinalType(Indent indent, String namespace, String name,
     {String parentClassName = 'GObject'}) {
   final String upperNamespace = namespace.toUpperCase();
@@ -1021,6 +1023,7 @@ void _writeDeclareFinalType(Indent indent, String namespace, String name,
       'G_DECLARE_FINAL_TYPE($className, $methodPrefix, $upperNamespace, $upperSnakeClassName, $parentClassName)');
 }
 
+// Writes the GObject macro to define a new type.
 void _writeDefineType(Indent indent, String namespace, String name,
     {String parentType = 'G_TYPE_OBJECT'}) {
   final String className = _getClassName(namespace, name);
@@ -1029,6 +1032,7 @@ void _writeDefineType(Indent indent, String namespace, String name,
   indent.writeln('G_DEFINE_TYPE($className, $methodPrefix, $parentType)');
 }
 
+// Writes the struct for a GObject.
 void _writeObjectStruct(
     Indent indent, String namespace, String name, Function func,
     {String parentClassName = 'GObject'}) {
@@ -1042,6 +1046,7 @@ void _writeObjectStruct(
   });
 }
 
+// Writes the dispose method for a GObject.
 void _writeDispose(
     Indent indent, String namespace, String name, Function func) {
   final String methodPrefix = _getMethodPrefix(namespace, name);
@@ -1054,6 +1059,7 @@ void _writeDispose(
   });
 }
 
+// Writes the init function for a GObject.
 void _writeInit(Indent indent, String namespace, String name, Function func) {
   final String className = _getClassName(namespace, name);
   final String methodPrefix = _getMethodPrefix(namespace, name);
@@ -1064,6 +1070,7 @@ void _writeInit(Indent indent, String namespace, String name, Function func) {
   });
 }
 
+// Writes the class init function for a GObject.
 void _writeClassInit(
     Indent indent, String namespace, String name, Function func,
     {bool hasDispose = true}) {
@@ -1081,6 +1088,7 @@ void _writeClassInit(
   });
 }
 
+// Writes the constructor for a GObject.
 void _writeObjectNew(Indent indent, String namespace, String name) {
   final String className = _getClassName(namespace, name);
   final String methodPrefix = _getMethodPrefix(namespace, name);
@@ -1090,6 +1098,7 @@ void _writeObjectNew(Indent indent, String namespace, String name) {
       '$className* self = $castMacro(g_object_new(${methodPrefix}_get_type(), nullptr));');
 }
 
+// Writes the cast used at the top of GObject methods.
 void _writeCastSelf(
     Indent indent, String namespace, String name, String variableName) {
   final String className = _getClassName(namespace, name);
@@ -1097,40 +1106,38 @@ void _writeCastSelf(
   indent.writeln('$className* self = $castMacro($variableName);');
 }
 
+// Converts a string from CamelCase to snake_case.
 String _snakeCaseFromCamelCase(String camelCase) {
   return camelCase.replaceAllMapped(RegExp(r'[A-Z]'),
       (Match m) => '${m.start == 0 ? '' : '_'}${m[0]!.toLowerCase()}');
 }
 
+// Returns the GObject class name for [name].
 String _getClassName(String namespace, String name) {
   return '$namespace$name';
 }
 
+// Returns the GObject macro to cast a GObject to a class of [name].
 String _getClassCastMacro(String namespace, String name) {
-  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
   final String className = _getClassName(namespace, name);
-  final String snakeClassName = _snakeCaseFromCamelCase(name);
-  return '${snakeNamespace}_$snakeClassName'.toUpperCase();
+  final String snakeClassName = _snakeCaseFromCamelCase(className);
+  return snakeClassName.toUpperCase();
 }
 
-String _getResponseName(String name, String methodName) {
-  final String upperMethodName =
-      methodName[0].toUpperCase() + methodName.substring(1);
-  return '$name${upperMethodName}Response';
-}
-
+// Returns the prefix used for methods in class [name].
 String _getMethodPrefix(String namespace, String name) {
-  final String snakeNamespace = _snakeCaseFromCamelCase(namespace);
-  final String snakeName = _snakeCaseFromCamelCase(name);
-  return '${snakeNamespace}_$snakeName';
+  final String className = _getClassName(namespace, name);
+  return _snakeCaseFromCamelCase(className);
 }
 
+// Returns an enumeration value in C++ form.
 String _getEnumValue(String namespace, String enumName, String memberName) {
   final String snakeEnumName = _snakeCaseFromCamelCase(enumName);
   final String snakeMemberName = _snakeCaseFromCamelCase(memberName);
   return '${namespace}_${snakeEnumName}_$snakeMemberName'.toUpperCase();
 }
 
+// Returns code for storing a value of [type].
 String _getType(String namespace, TypeDeclaration type,
     {bool isOutput = false}) {
   if (type.isClass) {
@@ -1154,27 +1161,8 @@ String _getType(String namespace, TypeDeclaration type,
   }
 }
 
-String _getLocalType(String namespace, TypeDeclaration type) {
-  if (type.isEnum ||
-      type.baseName == 'void' ||
-      type.baseName == 'bool' ||
-      type.baseName == 'int' ||
-      type.baseName == 'double') {
-    return _getType(namespace, type);
-  } else if (type.isClass) {
-    return 'g_autoptr(${_getClassName(namespace, type.baseName)})';
-  } else if (type.baseName == 'List' || type.baseName == 'Map') {
-    return 'g_autoptr(FlValue)';
-  } else if (type.baseName == 'String') {
-    return 'g_autofree gchar*';
-  } else {
-    throw Exception('Unknown type ${type.baseName}');
-  }
-}
-
-String? _getClear(NamedType namedType, String variableName) {
-  final TypeDeclaration type = namedType.type;
-
+// Returns code to clear a value stored in [variableName], or null if no function required.
+String? _getClearFunction(TypeDeclaration type, String variableName) {
   if (type.isClass) {
     return 'g_clear_object(&$variableName)';
   } else if (type.baseName == 'List' || type.baseName == 'Map') {
@@ -1186,6 +1174,7 @@ String? _getClear(NamedType namedType, String variableName) {
   }
 }
 
+// Returns code for the default value for [type].
 String _getDefaultValue(String namespace, TypeDeclaration type) {
   if (type.isClass) {
     return 'nullptr';
@@ -1209,9 +1198,8 @@ String _getDefaultValue(String namespace, TypeDeclaration type) {
   }
 }
 
-String _referenceValue(NamedType namedType, String variableName) {
-  final TypeDeclaration type = namedType.type;
-
+// Returns code to copy the native data type stored in [variableName].
+String _referenceValue(TypeDeclaration type, String variableName) {
   if (type.isClass || type.baseName == 'List' || type.baseName == 'Map') {
     return 'g_object_ref($variableName)';
   } else if (type.baseName == 'String') {
@@ -1221,6 +1209,7 @@ String _referenceValue(NamedType namedType, String variableName) {
   }
 }
 
+// Returns code to convert the native data type stored in [variableName] to a FlValue.
 String _makeFlValue(
     String namespace, TypeDeclaration type, String variableName) {
   if (type.isClass) {
@@ -1242,6 +1231,7 @@ String _makeFlValue(
   }
 }
 
+// Returns code to convert the FlValue stored in [variableName] to a native data type.
 String _fromFlValue(
     String namespace, TypeDeclaration type, String variableName) {
   if (type.isClass) {
@@ -1265,6 +1255,7 @@ String _fromFlValue(
   }
 }
 
+// Returns the FlValueType enumeration for the native data [type].
 String _getFlValueType(TypeDeclaration type) {
   if (type.isClass) {
     return 'FL_VALUE_TYPE_CUSTOM';
@@ -1285,4 +1276,11 @@ String _getFlValueType(TypeDeclaration type) {
   } else {
     throw Exception('Unknown type ${type.baseName}');
   }
+}
+
+// Returns the name of a GObject class used to send responses to [methodName].
+String _getResponseName(String name, String methodName) {
+  final String upperMethodName =
+      methodName[0].toUpperCase() + methodName.substring(1);
+  return '$name${upperMethodName}Response';
 }
