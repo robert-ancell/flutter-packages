@@ -159,14 +159,15 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     addDocumentationComments(
         indent, anEnum.documentationComments, _docCommentSpec);
     indent.addScoped('typedef enum {', '} $enumName;', () {
-      final List<String> enumValues = <String>[];
       for (int i = 0; i < anEnum.members.length; i++) {
         final EnumMember member = anEnum.members[i];
         final String itemName =
             _getEnumValue(namespace, anEnum.name, member.name);
-        enumValues.add('$itemName = $i');
+        addDocumentationComments(
+            indent, member.documentationComments, _docCommentSpec);
+        indent.writeln(
+            '$itemName = $i${i == anEnum.members.length - 1 ? '' : ','}');
       }
-      indent.writeln(enumValues.join(', '));
     });
   }
 
@@ -185,6 +186,8 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
         _getMethodPrefix(namespace, classDefinition.name);
 
     indent.newln();
+    addDocumentationComments(
+        indent, classDefinition.documentationComments, _docCommentSpec);
     _writeDeclareFinalType(indent, namespace, classDefinition.name);
 
     indent.newln();
@@ -202,6 +205,8 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
       final String returnType = _getType(namespace, field.type);
 
       indent.newln();
+      addDocumentationComments(
+          indent, field.documentationComments, _docCommentSpec);
       indent.writeln(
           '$returnType ${methodPrefix}_get_$fieldName($className* object);');
     }
@@ -221,6 +226,8 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
     final String methodPrefix = _getMethodPrefix(namespace, api.name);
 
     indent.newln();
+    addDocumentationComments(
+        indent, api.documentationComments, _docCommentSpec);
     _writeDeclareFinalType(indent, namespace, api.name);
 
     indent.newln();
@@ -242,6 +249,8 @@ class LinuxHeaderGenerator extends StructuredGenerator<LinuxOptions> {
         'gpointer user_data'
       ]);
       indent.newln();
+      addDocumentationComments(
+          indent, method.documentationComments, _docCommentSpec);
       indent.writeln(
           "void ${methodPrefix}_${methodName}_async(${asyncArgs.join(', ')});");
 
@@ -1144,6 +1153,8 @@ String _getType(String namespace, TypeDeclaration type,
     return '${_getClassName(namespace, type.baseName)}*';
   } else if (type.isEnum) {
     return _getClassName(namespace, type.baseName);
+  } else if (type.baseName == 'List' || type.baseName == 'Map') {
+    return 'FlValue*';
   } else if (type.baseName == 'void') {
     return 'void';
   } else if (type.baseName == 'bool') {
@@ -1154,8 +1165,6 @@ String _getType(String namespace, TypeDeclaration type,
     return 'double';
   } else if (type.baseName == 'String') {
     return isOutput ? 'gchar*' : 'const gchar*';
-  } else if (type.baseName == 'Map') {
-    return 'FlValue*';
   } else {
     throw Exception('Unknown type ${type.baseName}');
   }
@@ -1218,6 +1227,8 @@ String _makeFlValue(
     return 'fl_value_new_int($variableName)';
   } else if (type.baseName == 'List' || type.baseName == 'Map') {
     return 'fl_value_ref($variableName)';
+  } else if (type.baseName == 'void') {
+    return 'fl_value_new_null()';
   } else if (type.baseName == 'bool') {
     return 'fl_value_new_bool($variableName)';
   } else if (type.baseName == 'int') {
