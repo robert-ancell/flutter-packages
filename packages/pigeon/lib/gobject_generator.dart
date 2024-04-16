@@ -258,10 +258,12 @@ class GObjectHeaderGenerator extends StructuredGenerator<GObjectOptions> {
           "void ${methodPrefix}_$methodName(${asyncArgs.join(', ')});");
 
       final String returnType =
-          _getType(module, method.returnType, isOutput: true);
+          _getType(module, method.returnType, isOutput: true, primitive: true);
       final List<String> finishArgs = <String>[
         '$className* self',
         'GAsyncResult* result',
+        if (_isNullablePrimitiveType(method.returnType))
+          'bool* return_value_set',
         if (returnType != 'void') '$returnType* return_value',
         if (_isNumericListType(method.returnType))
           'size_t* return_value_length',
@@ -460,13 +462,15 @@ class GObjectSourceGenerator extends StructuredGenerator<GObjectOptions> {
       for (final NamedType field in classDefinition.fields) {
         final String fieldName = _snakeCaseFromCamelCase(field.name);
         final String fieldType = _getType(module, field.type, isOutput: true);
-        indent.writeln('$fieldType $fieldName;');
-        if (_isNumericListType(field.type)) {
-          indent.writeln('size_t ${fieldName}_length;');
-        }
         if (_isNullablePrimitiveType(field.type)) {
           indent.writeln(
-              '${_getType(module, field.type, isOutput: true, primitive: true)} ${fieldName}_value;');
+              '${_getType(module, field.type, isOutput: true, primitive: true)} $fieldName;');
+          indent.writeln('gboolean ${fieldName}_set;');
+        } else {
+          indent.writeln('$fieldType $fieldName;');
+          if (_isNumericListType(field.type)) {
+            indent.writeln('size_t ${fieldName}_length;');
+          }
         }
       }
     });
@@ -516,9 +520,9 @@ class GObjectSourceGenerator extends StructuredGenerator<GObjectOptions> {
 
         if (_isNullablePrimitiveType(field.type)) {
           indent.writeln(
-              'self->${fieldName}_value = $value != nullptr ? *$value : ${_getDefaultValue(module, field.type, primitive: true)};');
+              'self->${fieldName} = $value != nullptr ? *$value : ${_getDefaultValue(module, field.type, primitive: true)};');
           indent.writeln(
-              'self->${fieldName} = $value != nullptr ? &self->${fieldName}_value : nullptr;');
+              'self->${fieldName}_set = $value != nullptr;');
         } else {
           indent.writeln('self->$fieldName = $value;');
         }
@@ -546,7 +550,14 @@ class GObjectSourceGenerator extends StructuredGenerator<GObjectOptions> {
         if (_isNumericListType(field.type)) {
           indent.writeln('*length = self->${fieldName}_length;');
         }
+        if (_isNullablePrimitiveType(field.type)) 
+	{
+        indent.writeln('return self->${fieldName}_set ? &self->${fieldName} : nullptr;');
+	}
+	else
+	{
         indent.writeln('return self->$fieldName;');
+	}
       });
     }
 
@@ -687,10 +698,12 @@ class GObjectSourceGenerator extends StructuredGenerator<GObjectOptions> {
       });
 
       final String returnType =
-          _getType(module, method.returnType, isOutput: true);
+          _getType(module, method.returnType, isOutput: true, primitive: true);
       final List<String> finishArgs = <String>[
         '$className* self',
         'GAsyncResult* result',
+        if (_isNullablePrimitiveType(method.returnType))
+          'bool* return_value_set',
         if (returnType != 'void') '$returnType* return_value',
         if (_isNumericListType(method.returnType))
           'size_t* return_value_length',
@@ -717,10 +730,20 @@ class GObjectSourceGenerator extends StructuredGenerator<GObjectOptions> {
           indent.newln();
           final String returnValue =
               _fromFlValue(module, method.returnType, 'r');
-          indent.writeln(
-              '*return_value = ${_referenceValue(method.returnType, returnValue, lengthVariableName: 'fl_value_get_length(r)')};');
+          String returnReference = _referenceValue(
+              method.returnType, returnValue,
+              lengthVariableName: 'fl_value_get_length(r)');
+          String returnLength = 'fl_value_get_length(r)';
+          if (_isNullablePrimitiveType(method.returnType)) {
+            indent.writeln(
+                'gboolean is_set = fl_value_get_type(r) != FL_VALUE_TYPE_NULL;');
+            indent.writeln('*return_value_set = is_set;');
+            returnReference = 'is_set ? $returnReference : ${_getDefaultValue(module, method.returnType, primitive: true)}';
+            returnLength = 'is_set ? $returnLength : 0';
+          }
+          indent.writeln('*return_value = $returnReference;');
           if (_isNumericListType(method.returnType)) {
-            indent.writeln('*return_value_length = fl_value_get_length(r);');
+            indent.writeln('*return_value_length = $returnLength;');
           }
         }
 
@@ -1475,7 +1498,9 @@ String _makeFlValue(String module, TypeDeclaration type, String variableName,
     throw Exception('Unknown type ${type.baseName}');
   }
 
-  if (type.isNullable) {
+if (_isNullablePrimitiveType(type)) {
+    return '${variableName}_set ? $value : fl_value_new_null()';
+  } else if (type.isNullable) {
     return '$variableName != nullptr ? $value : fl_value_new_null()';
   } else {
     return value;

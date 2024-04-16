@@ -41,6 +41,7 @@ class MessageData {
   String? description;
   Code code;
   Map<String?, String?> data;
+  int? zzz;
 }
 
 @HostApi()
@@ -61,5 +62,6 @@ abstract class ExampleHostApi {
 @FlutterApi()
 abstract class MessageFlutterApi {
   String flutterMethod(String? aString);
+  int? flutterMethodX();
 }
 // #enddocregion flutter-definitions
